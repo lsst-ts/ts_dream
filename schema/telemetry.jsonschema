@@ -1,0 +1,235 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "master": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "standby",
+            "started",
+            "operating",
+            "stopped",
+            "error"
+          ]
+        },
+        "start_time": {
+          "type": "string"
+        },
+        "stop_time": {
+          "type": "string"
+        },
+        "error_code": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "start_time",
+        "stop_time",
+        "error_code"
+      ],
+      "additionalProperties": false
+    },
+    "south": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "standby",
+            "started",
+            "operating",
+            "stopped",
+            "error"
+          ]
+        },
+        "error_code": {
+          "type": "number"
+        },
+        "altitude": {
+          "type": "number"
+        },
+        "azimuth": {
+          "type": "number"
+        },
+        "last_exposure_timestamp": {
+          "type": "number"
+        },
+        "exposure_time": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "error_code",
+        "altitude",
+        "azimuth",
+        "last_exposure_timestamp",
+        "exposure_time"
+      ],
+      "additionalProperties": false
+    },
+    "east": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "standby",
+            "started",
+            "operating",
+            "stopped",
+            "error"
+          ]
+        },
+        "error_code": {
+          "type": "number"
+        },
+        "altitude": {
+          "type": "number"
+        },
+        "azimuth": {
+          "type": "number"
+        },
+        "last_exposure_timestamp": {
+          "type": "number"
+        },
+        "exposure_time": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "error_code",
+        "altitude",
+        "azimuth",
+        "last_exposure_timestamp",
+        "exposure_time"
+      ],
+      "additionalProperties": false
+    },
+    "north": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "standby",
+            "started",
+            "operating",
+            "stopped",
+            "error"
+          ]
+        },
+        "error_code": {
+          "type": "number"
+        },
+        "altitude": {
+          "type": "number"
+        },
+        "azimuth": {
+          "type": "number"
+        },
+        "last_exposure_timestamp": {
+          "type": "number"
+        },
+        "exposure_time": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "error_code",
+        "altitude",
+        "azimuth",
+        "last_exposure_timestamp",
+        "exposure_time"
+      ],
+      "additionalProperties": false
+    },
+    "west": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "standby",
+            "started",
+            "operating",
+            "stopped",
+            "error"
+          ]
+        },
+        "error_code": {
+          "type": "number"
+        },
+        "altitude": {
+          "type": "number"
+        },
+        "azimuth": {
+          "type": "number"
+        },
+        "last_exposure_timestamp": {
+          "type": "number"
+        },
+        "exposure_time": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "error_code",
+        "altitude",
+        "azimuth",
+        "last_exposure_timestamp",
+        "exposure_time"
+      ],
+      "additionalProperties": false
+    },
+    "zenith": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "enum": [
+            "standby",
+            "started",
+            "operating",
+            "stopped",
+            "error"
+          ]
+        },
+        "error_code": {
+          "type": "number"
+        },
+        "altitude": {
+          "type": "number"
+        },
+        "azimuth": {
+          "type": "number"
+        },
+        "last_exposure_timestamp": {
+          "type": "number"
+        },
+        "exposure_time": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "state",
+        "error_code",
+        "altitude",
+        "azimuth",
+        "last_exposure_timestamp",
+        "exposure_time"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "master",
+    "south",
+    "east",
+    "north",
+    "west",
+    "zenith"
+  ],
+  "additionalProperties": false
+}

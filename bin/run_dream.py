@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # This file is part of ts_dream.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
@@ -19,16 +21,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Sphinx configuration file for an LSST stack package.
+import asyncio
+import logging
 
-This configuration only affects single-package Sphinx documentation builds.
-"""
+from lsst.ts import dream
 
-from documenteer.conf.pipelinespkg import *  # noqa
-import lsst.ts.dream  # noqa
+logging.basicConfig(
+    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s",
+    level=logging.INFO,
+)
 
-project = "ts_dream"
-html_theme_options["logotext"] = project  # noqa
-html_title = project
-html_short_title = project
-doxylink = {}  # Avoid warning: Could not find tag file _doxygen/doxygen.tag
+
+asyncio.run(dream.DreamCsc.amain(index=None))

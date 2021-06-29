@@ -80,6 +80,15 @@ pipeline {
                 }
             }
         }
+        stage("Checkout ts_tcpip") {
+            steps {
+                script {
+                    sh """
+                    docker exec -u saluser \${container_name} sh -c \"source ~/.setup.sh && cd /home/saluser/repos/ts_tcpip/ && /home/saluser/.checkout_repo.sh \${work_branches} \"
+                    """
+                }
+            }
+        }
         stage("Running tests") {
             steps {
                 script {
@@ -101,6 +110,24 @@ pipeline {
                 reportFiles: 'index.html',
                 reportName: "Coverage Report"
               ])
+
+            sh "docker exec -u saluser \${container_name} sh -c \"" +
+                "source ~/.setup.sh && " +
+                "cd /home/saluser/repo/ && " +
+                "setup ts_dream -t saluser && " +
+                "package-docs build\""
+
+            script {
+                def RESULT = sh returnStatus: true, script: "docker exec -u saluser \${container_name} sh -c \"" +
+                    "source ~/.setup.sh && " +
+                    "cd /home/saluser/repo/ && " +
+                    "setup ts_dream -t saluser && " +
+                    "ltd upload --product ts-ess --git-ref \${GIT_BRANCH} --dir doc/_build/html\""
+
+                if ( RESULT != 0 ) {
+                    unstable("Failed to push documentation.")
+                }
+             }
         }
         cleanup {
             sh """

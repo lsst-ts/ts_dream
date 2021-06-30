@@ -29,6 +29,15 @@ CONFIG_SCHEMA = yaml.safe_load(
     description: Schema for DREAM configuration files
     type: object
     properties:
+      host:
+        description: IP address of the TCP/IP interface
+        type: string
+        format: hostname
+        default: "127.0.0.1"
+      port:
+        description: Port number of the TCP/IP interface
+        type: integer
+        default: 5000
       connection_timeout:
         description: Time limit for connecting to the TCP/IP interface (sec)
         type: number
@@ -40,6 +49,8 @@ CONFIG_SCHEMA = yaml.safe_load(
         exclusiveMinimum: 0
         default: 10
     required:
+      - host
+      - port
       - connection_timeout
       - read_timeout
     additionalProperties: false

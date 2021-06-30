@@ -58,15 +58,19 @@ The metadata array contains the following, mandatory items:
 Dream Interface
 ===============
 
+The ICD (work in progressO can be found here
+
+https://drive.google.com/file/d/10SGy_6t6IAMdYFAJb7st3vmo_38tM-Vw/view?usp=sharing
+
 The operational commands are
 
-* resume: indicate that DREAM is permitted to resume automated operations
-* open: open the hatch if DREAM has evaluated that it is safe to do so
-* close: close the hatch
-* stop: immediately stop operations and close the hatch
-* readyForData: inform DREAM that Rubin Observatory is ready to receive data with a True/False parameter
-* dataArchived: inform DREAM that Rubin Observatory has received and archived a data product
-* setWeatherInfo: provide the latest weather information from Rubin Observatory to DREAM in JSON format
+* resume: Indicate that DREAM is permitted to resume automated operations
+* openHatch: Open the hatch if DREAM has evaluated that it is safe to do so
+* closeHatch: Close the hatch
+* stop: Immediately stop operations and close the hatch
+* readyForData: Inform DREAM that Rubin Observatory is ready to receive data with a True/False parameter
+* dataArchived: Inform DREAM that Rubin Observatory has received and archived a data product
+* setWeatherInfo: Provide the latest weather information from Rubin Observatory to DREAM in JSON format
 
 The weather information contains the following items
 

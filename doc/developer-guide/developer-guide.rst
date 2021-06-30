@@ -75,7 +75,6 @@ Both DREAM and ts_dream will have a simulator.
 The simulators are intended to be used for testing purposes.
 The DREAM simulator will be used to test the implementation of the commands sent by the CSC and for reception of the telemetry.
 The ts_dream simulator will be used to test the implementation of reception of commands sent by the CSC and for sending telemetry.
-Note that there is a circular dependency that the developers of DREAM and ts_dream need to keep in mind.
 
 .. _Firmware:
 

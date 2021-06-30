@@ -36,13 +36,13 @@ class MockDream(tcpip.OneClientServer):
 
     Parameters
     ----------
-    host : `str` or `None`
+    host: `str` or `None`
         IP address for this server.
         If `None` then bind to all network interfaces.
-    port : `int`
+    port: `int`
         IP port for this server. If 0 then use a random port.
-    simulation_mode : `int`, optional
-        Simulation mode. The default is 0: do not simulate.
+    family: `socket.AddressFamily`, optional
+        Address family for the socket connection, or socket.AF_UNSPEC.
     """
 
     def __init__(
@@ -110,41 +110,37 @@ class MockDream(tcpip.OneClientServer):
 
     async def read_loop(self: tcpip.OneClientServer) -> None:
         """Read commands and output replies."""
-        try:
-            self.log.info(f"The read_loop begins connected? {self.connected}")
-            while self.connected:
-                self.log.debug("Waiting for next incoming message.")
-                try:
-                    line = await self.reader.readuntil(tcpip.TERMINATOR)
-                    time_command_received = time.time()
-                    line = line.decode().strip()
-                    self.log.debug(f"Read command line: {line!r}")
-                    items = json.loads(line)
-                    cmd = items["command"]
-                    cmd_id = items["cmd_id"]
-                    # time_command_sent = items["time_command_sent"]
-                    kwargs = {}
-                    if "parameters" in items:
-                        kwargs = items["parameters"]
-                    if cmd not in self.dispatch_dict:
-                        raise KeyError(f"Invalid command {cmd} received.")
-                    else:
-                        func = self.dispatch_dict[cmd]
-                        await func(**kwargs)
-                        await self.write(
-                            {
-                                "cmd_id": cmd_id,
-                                "time_command_received": time_command_received,
-                                "time_ack_sent": time.time(),
-                                "response": "OK",
-                            }
-                        )
+        self.log.info(f"The read_loop begins connected? {self.connected}")
+        while self.connected:
+            self.log.debug("Waiting for next incoming message.")
+            try:
+                line = await self.reader.readuntil(tcpip.TERMINATOR)
+                time_command_received = time.time()
+                line = line.decode().strip()
+                self.log.debug(f"Read command line: {line!r}")
+                items = json.loads(line)
+                cmd = items["command"]
+                cmd_id = items["cmd_id"]
+                # time_command_sent = items["time_command_sent"]
+                kwargs = {}
+                if "parameters" in items:
+                    kwargs = items["parameters"]
+                if cmd not in self.dispatch_dict:
+                    raise KeyError(f"Invalid command {cmd} received.")
+                else:
+                    func = self.dispatch_dict[cmd]
+                    await func(**kwargs)
+                    await self.write(
+                        {
+                            "cmd_id": cmd_id,
+                            "time_command_received": time_command_received,
+                            "time_ack_sent": time.time(),
+                            "response": "OK",
+                        }
+                    )
 
-                except asyncio.IncompleteReadError:
-                    self.log.exception("Read error encountered. Retrying.")
-
-        except Exception:
-            self.log.exception("read_loop failed")
+            except asyncio.IncompleteReadError:
+                self.log.exception("Read error encountered. Retrying.")
 
     async def disconnect(self) -> None:
         """Disconnect the client."""
@@ -189,7 +185,7 @@ class MockDream(tcpip.OneClientServer):
         self.log.info("dataArchived called.")
 
     async def set_weather_info(
-        self, weather_info: typing.Dict[str, typing.Union[float, int, bool]]
+        self, weather_info: typing.Dict[str, typing.Union[float, bool]]
     ):
         """Provide the latest weather information from Rubin Observatory.
 
@@ -199,12 +195,12 @@ class MockDream(tcpip.OneClientServer):
             The weather info as provided by Rubin Observatory. The contents are
 
             - temperature: `float` (ºC)
-            - humidity: `int` (0 - 100%)
-            - wind_speed: `int` (m/s)
-            - wind_direction: `int` (0 - 360º azimuth)
-            - pressure: `int` (Pa)
-            - rain: `int` (>= 0 mm)
-            - cloudcover: `int` (0 - 100%)
+            - humidity: `float` (0 - 100%)
+            - wind_speed: `float` (m/s)
+            - wind_direction: `float` (0 - 360º azimuth)
+            - pressure: `float` (Pa)
+            - rain: `float` (>= 0 mm)
+            - cloudcover: `float` (0 - 100%)
             - safe_observing_conditions: `bool` (True or False)
 
         """

@@ -22,8 +22,9 @@
 import logging
 import unittest
 
-from lsst.ts import salobj
-from lsst.ts import dream
+from lsst.ts import salobj, dream
+
+STD_TIMEOUT = 2  # standard command timeout (sec)
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -31,11 +32,25 @@ logging.basicConfig(
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self) -> None:
+        self.srv = dream.mock.MockDream(host="0.0.0.0", port=0)
+        await self.srv.start_task
+        self.mock_port = self.srv.port
+        self.writer = None
+
+    async def asyncTearDown(self):
+        await self.srv.disconnect()
+        if self.writer:
+            self.writer.close()
+            await self.writer.wait_closed()
+        await self.srv.exit()
+
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
         return dream.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
+            mock_port=self.mock_port,
         )
 
     async def test_standard_state_transitions(self):
@@ -45,17 +60,22 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.check_standard_state_transitions(
                 enabled_commands=(),
                 skip_commands=(
-                    "setEnabled",
-                    "getDataProduct",
-                    "operate",
-                    "status",
+                    "resume",
+                    "openHatch",
+                    "closeHatch",
+                    "stop",
+                    "readyForData",
+                    "dataArchived",
                     "setWeatherInfo",
                 ),
             )
 
     async def test_version(self):
+        logging.info("test_version")
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
+            initial_state=salobj.State.STANDBY,
+            config_dir=None,
+            simulation_mode=1,
         ):
             await self.assert_next_sample(
                 self.remote.evt_softwareVersions,

@@ -16,11 +16,4 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-try:
-    from .version import *
-except ModuleNotFoundError:
-    __version__ = "?"
-
-from .config_schema import CONFIG_SCHEMA
-from .dream_csc import *
-from .mock import *
+from .mock_dream import *

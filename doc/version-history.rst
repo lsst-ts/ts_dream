@@ -1,10 +1,14 @@
-.. py:currentmodule:: lsst.ts.dream
-
-.. _lsst.ts.dream.version_history:
+.. _version_history:Version_History:
 
 ###############
 Version History
 ###############
+
+v0.2.0
+======
+
+* Updated the CSC accordingly to changes in the ICD.
+* Added documentation describing the communication protocols.
 
 v0.1.0
 ======

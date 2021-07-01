@@ -23,6 +23,7 @@ test:
     - ts-conda-build
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
+    - ts-tcpip
   source_files:
     - python
     - bin

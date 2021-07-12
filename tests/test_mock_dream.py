@@ -23,7 +23,7 @@ import time
 import unittest
 
 from lsst.ts import tcpip
-from lsst.ts.dream.mock.mock_dream import MockDream
+from lsst.ts.dream import MockDream
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -35,13 +35,9 @@ TIMEOUT = 5
 
 class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        self.ctrl = None
-        self.writer = None
-        self.mock_ctrl = None
-        self.srv: MockDream = MockDream(host="0.0.0.0", port=0)
-
         self.log = logging.getLogger(type(self).__name__)
 
+        self.srv: MockDream = MockDream(host="0.0.0.0", port=0)
         await self.srv.start_task
         self.assertTrue(self.srv.server.is_serving())
         self.reader, self.writer = await asyncio.open_connection(

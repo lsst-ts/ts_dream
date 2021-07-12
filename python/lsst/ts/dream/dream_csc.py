@@ -18,17 +18,12 @@
 
 __all__ = ["DreamCsc"]
 
-import asyncio
-import json
-import time
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Optional
 
 from . import __version__, CONFIG_SCHEMA
-from lsst.ts import salobj, tcpip
-
-"""Standard timeout in seconds for socket connections."""
-SOCKET_TIMEOUT = 5
+from .model import DreamModel
+from lsst.ts import salobj
 
 
 class DreamCsc(salobj.ConfigurableCsc):
@@ -67,12 +62,8 @@ class DreamCsc(salobj.ConfigurableCsc):
             initial_state=initial_state,
             simulation_mode=simulation_mode,
         )
-        self.reader: Optional[asyncio.StreamReader] = None
-        self.writer: Optional[asyncio.StreamWriter] = None
-        self.host: Optional[str] = None
-        self.port: Optional[int] = None
         self.mock_port: Optional[int] = mock_port
-        self.read_loop: asyncio.Future = salobj.make_done_future()
+        self.model = DreamModel(log=self.log)
 
     async def connect(self) -> None:
         """Determine if running in local or remote mode and dispatch to the
@@ -91,75 +82,11 @@ class DreamCsc(salobj.ConfigurableCsc):
         if self.connected:
             raise RuntimeError("Already connected")
 
-        if not self.host:
-            self.host = self.config.host
+        host: str = self.config.host
+        port: int = self.config.port
         if self.mock_port:
-            self.port = self.mock_port
-        if not self.port:
-            self.port = self.config.port
-        rw_coro = asyncio.open_connection(host=self.host, port=self.port)
-        self.reader, self.writer = await asyncio.wait_for(
-            rw_coro, timeout=SOCKET_TIMEOUT
-        )
-        # Start a loop to read incoming data from the SocketServer.
-        self.read_loop = asyncio.create_task(self._read_loop())
-
-    async def read(self) -> dict:
-        """Utility function to read a string from the reader and unmarshal it
-
-        Returns
-        -------
-        data: `dict`
-            A dictionary with objects representing the string read.
-        """
-        if not self.reader or not self.connected:
-            raise RuntimeError("Not connected")
-
-        read_bytes = await asyncio.wait_for(
-            self.reader.readuntil(tcpip.TERMINATOR), timeout=SOCKET_TIMEOUT
-        )
-        data = json.loads(read_bytes.decode())
-        return data
-
-    async def write(self, command: str, **data: Any) -> None:
-        """Write the command and data appended with a newline character.
-
-        Parameters
-        ----------
-        command: `str`
-            The command to write.
-        data: `dict`
-            The data to write.
-
-        Raises
-        ------
-        RuntimeError
-            In case there is no socket connection to a server.
-        """
-        if not self.writer or not self.connected:
-            raise RuntimeError("Not connected")
-
-        cmd_id: int = salobj.index_generator()
-        time_command_sent: float = time.time()
-        st = json.dumps(
-            {
-                "command": command,
-                "cmd_id": cmd_id,
-                "time_command_sent": time_command_sent,
-                **data,
-            }
-        )
-        self.writer.write(st.encode() + tcpip.TERMINATOR)
-        await self.writer.drain()
-
-    async def _read_loop(self) -> None:
-        """Execute a loop that reads incoming data from the SocketServer."""
-        try:
-            while True:
-                data = await self.read()
-                self.log.info(f"Received data {data!r}")
-        except Exception:
-            self.log.exception("_read_loop failed")
+            port = self.mock_port
+        await self.model.connect(host=host, port=port)
 
     async def begin_enable(self, id_data) -> None:
         """Begin do_enable; called before state changes.
@@ -206,6 +133,7 @@ class DreamCsc(salobj.ConfigurableCsc):
     async def disconnect(self):
         """Disconnect the DREAM CSC, if connected."""
         self.log.info("Disconnecting")
+        await self.model.disconnect()
 
     async def handle_summary_state(self):
         """Override of the handle_summary_state function to connect or
@@ -223,12 +151,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     @property
     def connected(self) -> bool:
-        return not (
-            self.reader is None
-            or self.writer is None
-            or self.reader.at_eof()
-            or self.writer.is_closing()
-        )
+        return not self.model.connected
 
     @staticmethod
     def get_config_pkg() -> str:

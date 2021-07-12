@@ -16,18 +16,4 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-import typing
-
-# See https://confluence.lsstcorp.org/display/LTS/Enabling+Mypy+in+Pytest for
-# why this construction is needed.
-if typing.TYPE_CHECKING:
-    __version__ = "?"
-else:
-    try:
-        from .version import *
-    except ImportError:
-        __version__ = "?"
-
-from .config_schema import CONFIG_SCHEMA
-from .dream_csc import *
-from .mock import *
+from .dream_model import DreamModel

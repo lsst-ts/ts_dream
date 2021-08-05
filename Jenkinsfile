@@ -113,7 +113,7 @@ pipeline {
                     "source ~/.setup.sh && " +
                     "cd /home/saluser/repo/ && " +
                     "setup ts_dream -t saluser && " +
-                    "ltd upload --product ts-ess --git-ref \${GIT_BRANCH} --dir doc/_build/html\""
+                    "ltd upload --product ts-dream --git-ref \${GIT_BRANCH} --dir doc/_build/html\""
 
                 if ( RESULT != 0 ) {
                     unstable("Failed to push documentation.")

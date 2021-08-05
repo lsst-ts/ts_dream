@@ -24,7 +24,7 @@
 import asyncio
 import logging
 
-from lsst.ts import dream
+from lsst.ts.dream import csc
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s",
@@ -32,4 +32,4 @@ logging.basicConfig(
 )
 
 
-asyncio.run(dream.DreamCsc.amain(index=None))
+asyncio.run(csc.DreamCsc.amain(index=None))

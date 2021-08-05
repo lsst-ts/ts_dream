@@ -20,8 +20,8 @@ import logging
 import unittest
 
 from lsst.ts import tcpip
-from lsst.ts.dream.mock import MockDream
-from lsst.ts.dream.model import DreamModel
+from lsst.ts.dream.csc.mock import MockDream
+from lsst.ts.dream.csc.model import DreamModel
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG

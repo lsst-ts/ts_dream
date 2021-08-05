@@ -23,7 +23,7 @@ import time
 import unittest
 
 from lsst.ts import tcpip
-from lsst.ts.dream import MockDream
+from lsst.ts.dream.csc import MockDream
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG

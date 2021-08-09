@@ -22,14 +22,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import logging
 
 from lsst.ts.dream import csc
-
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s",
-    level=logging.INFO,
-)
 
 
 asyncio.run(csc.DreamCsc.amain(index=None))

@@ -15,10 +15,11 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
 import setuptools  # type: ignore
-import pathlib
 from typing import List
 
 install_requires: List[str] = []
@@ -35,9 +36,6 @@ __all__ = ["__version__"]
 
 __version__ = "{version}"
 """
-tools_path = pathlib.PurePosixPath(setuptools.__path__[0])
-base_prefix = pathlib.PurePosixPath(sys.base_prefix)
-data_files_path = tools_path.relative_to(base_prefix).parents[1]
 
 setuptools.setup(
     name="ts_dream",

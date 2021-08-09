@@ -15,6 +15,9 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ["DreamModel"]
 
@@ -154,7 +157,7 @@ class DreamModel:
         except Exception:
             self.log.exception("_read_loop failed")
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect, if connected."""
         self.log.info("Disconnecting")
 

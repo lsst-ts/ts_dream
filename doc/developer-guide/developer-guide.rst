@@ -19,6 +19,7 @@ These are the dependencies for the latest version of ts_dream:
 * ts_salobj - v6.5
 * ts_idl - v3.2
 * ts_tcpip - v0.3
+* ts_dream_common - v0.1
 
 .. _API:
 

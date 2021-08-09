@@ -15,6 +15,9 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ["DreamCsc"]
 
@@ -88,7 +91,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             port = self.mock_port
         await self.model.connect(host=host, port=port)
 
-    async def begin_enable(self, id_data) -> None:
+    async def begin_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """Begin do_enable; called before state changes.
 
         This method sends a CMD_INPROGRESS signal.
@@ -101,7 +104,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         await super().begin_enable(id_data)
         self.cmd_enable.ack_in_progress(id_data, timeout=60)
 
-    async def end_enable(self, id_data) -> None:
+    async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
         acknowledged.
 
@@ -116,7 +119,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             await self.connect()
         await super().end_enable(id_data)
 
-    async def begin_disable(self, id_data) -> None:
+    async def begin_disable(self, id_data: salobj.BaseDdsDataType) -> None:
         """Begin do_disable; called before state changes.
 
         This method will try to gracefully stop the ESS Instrument and then
@@ -130,12 +133,12 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.cmd_disable.ack_in_progress(id_data, timeout=60)
         await super().begin_disable(id_data)
 
-    async def disconnect(self):
+    async def disconnect(self) -> None:
         """Disconnect the DREAM CSC, if connected."""
         self.log.info("Disconnecting")
         await self.model.disconnect()
 
-    async def handle_summary_state(self):
+    async def handle_summary_state(self) -> None:
         """Override of the handle_summary_state function to connect or
         disconnect to the DREAM CSC (or the mock client) when needed.
         """
@@ -146,7 +149,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         else:
             await self.disconnect()
 
-    async def configure(self, config):
+    async def configure(self, config: SimpleNamespace) -> None:
         self.config = config
 
     @property

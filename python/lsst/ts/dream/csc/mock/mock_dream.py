@@ -15,6 +15,9 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ["MockDream"]
 
@@ -26,9 +29,10 @@ import time
 import typing
 
 from lsst.ts import tcpip
+from lsst.ts.dream import common
 
 
-class MockDream(tcpip.OneClientServer):
+class MockDream(tcpip.OneClientServer, common.AbstractDream):
     """A mock DREAM server for exchanging messages that talks over TCP/IP.
 
     Upon initiation a socket server is set up which waits for incoming
@@ -62,8 +66,8 @@ class MockDream(tcpip.OneClientServer):
             "openHatch": self.open_hatch,
             "closeHatch": self.close_hatch,
             "stop": self.stop,
-            "readyForData": self.ready_for_data,
-            "dataArchived": self.data_archived,
+            "readyForData": self.set_ready_for_data,
+            "dataArchived": self.set_data_archived,
             "setWeatherInfo": self.set_weather_info,
         }
 
@@ -81,7 +85,7 @@ class MockDream(tcpip.OneClientServer):
             family=family,
         )
 
-    def connected_callback(self, server) -> None:
+    def connected_callback(self, server: tcpip.OneClientServer) -> None:
         """A client has connected or disconnected."""
         self.read_loop_task.cancel()
         if server.connected:
@@ -152,23 +156,23 @@ class MockDream(tcpip.OneClientServer):
         await self.close()
         self.log.info("Done closing")
 
-    async def resume(self):
+    async def resume(self) -> None:
         """Indicate that DREAM is permitted to resume automated operations."""
         self.log.info("resume called.")
 
-    async def open_hatch(self):
+    async def open_hatch(self) -> None:
         """Open the hatch if DREAM has evaluated that it is safe to do so."""
         self.log.info("open called.")
 
-    async def close_hatch(self):
+    async def close_hatch(self) -> None:
         """Close the hatch."""
         self.log.info("close called.")
 
-    async def stop(self):
+    async def stop(self) -> None:
         """Immediately stop operations and close the hatch."""
         self.log.info("stop called.")
 
-    async def ready_for_data(self, ready: bool):
+    async def set_ready_for_data(self, ready: bool) -> None:
         """Inform DREAM that Rubin Observatory is ready to receive data as
         indicated.
 
@@ -179,14 +183,14 @@ class MockDream(tcpip.OneClientServer):
         """
         self.log.info(f"readyForData called with param ready {ready}")
 
-    async def data_archived(self):
+    async def set_data_archived(self) -> None:
         """Inform DREAM that Rubin Observatory has received and archived a data
         product."""
         self.log.info("dataArchived called.")
 
     async def set_weather_info(
         self, weather_info: typing.Dict[str, typing.Union[float, bool]]
-    ):
+    ) -> None:
         """Provide the latest weather information from Rubin Observatory.
 
         Parameters

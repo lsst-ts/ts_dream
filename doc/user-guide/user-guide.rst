@@ -58,7 +58,7 @@ The metadata array contains the following, mandatory items:
 Dream Interface
 ===============
 
-The ICD (work in progressO can be found here
+The ICD (work in progress) can be found here
 
 https://drive.google.com/file/d/10SGy_6t6IAMdYFAJb7st3vmo_38tM-Vw/view?usp=sharing
 

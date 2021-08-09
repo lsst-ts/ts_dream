@@ -80,6 +80,15 @@ pipeline {
                 }
             }
         }
+        stage("Checkout ts_dream_common") {
+            steps {
+                script {
+                    sh """
+                    docker exec -u saluser \${container_name} sh -c \"source ~/.setup.sh && cd /home/saluser/repos && git clone https://github.com/lsst-ts/ts_dream_common.git && cd ts_dream_common && /home/saluser/.checkout_repo.sh \${work_branches} && pip install --ignore-installed -e . && eups declare -r . -t saluser \"
+                    """
+                }
+            }
+        }
         stage("Running tests") {
             steps {
                 script {
@@ -113,7 +122,7 @@ pipeline {
                     "source ~/.setup.sh && " +
                     "cd /home/saluser/repo/ && " +
                     "setup ts_dream -t saluser && " +
-                    "ltd upload --product ts-ess --git-ref \${GIT_BRANCH} --dir doc/_build/html\""
+                    "ltd upload --product ts-dream --git-ref \${GIT_BRANCH} --dir doc/_build/html\""
 
                 if ( RESULT != 0 ) {
                     unstable("Failed to push documentation.")

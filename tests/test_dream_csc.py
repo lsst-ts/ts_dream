@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+#  type: ignore
+
 import logging
 import unittest
 
@@ -33,7 +35,7 @@ logging.basicConfig(
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.srv = dream.mock.MockDream(host="0.0.0.0", port=0)
+        self.srv = dream.csc.mock.MockDream(host="0.0.0.0", port=0)
         await self.srv.start_task
         self.mock_port = self.srv.port
         self.writer = None
@@ -46,7 +48,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         await self.srv.exit()
 
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
-        return dream.DreamCsc(
+        return dream.csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
@@ -79,7 +81,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             await self.assert_next_sample(
                 self.remote.evt_softwareVersions,
-                cscVersion=dream.__version__,
+                cscVersion=dream.csc.__version__,
                 subsystemVersions="",
             )
 

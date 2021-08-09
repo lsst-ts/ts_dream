@@ -15,13 +15,19 @@
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#  type: ignore
+
 import asyncio
 import logging
 import unittest
 
 from lsst.ts import tcpip
-from lsst.ts.dream.mock import MockDream
-from lsst.ts.dream.model import DreamModel
+from lsst.ts.dream.csc.mock import MockDream
+from lsst.ts.dream.csc.model import DreamModel
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG

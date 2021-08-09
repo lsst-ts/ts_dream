@@ -24,6 +24,7 @@ test:
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
+    - ts-dream-common
   source_files:
     - python
     - bin
@@ -45,3 +46,5 @@ requirements:
     - setuptools_scm
     - ts-idl
     - ts-salobj
+    - ts-tcpip
+    - ts-dream-common

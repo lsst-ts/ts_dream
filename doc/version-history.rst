@@ -4,6 +4,19 @@
 Version History
 ###############
 
+v0.3.0
+======
+
+* Moved all python modules into the lsst.ts.dream.csc module.
+* Added a lsst.ts.dream.common package in a dedicated repository and started using it.
+
+Requires:
+
+* ts-dream-common
+* ts_salobj 6.5
+* ts_idl 3.2
+* IDL file for DREAM from ts_xml 9.1
+
 v0.2.0
 ======
 

@@ -24,3 +24,10 @@ ospl-error.log
 ospl-info.log
 
 .idea/
+.pre-commit-config.yaml
+.clang-format
+.flake8
+.isort.cfg
+.mypy.ini
+.ruff.toml
+towncrier.toml

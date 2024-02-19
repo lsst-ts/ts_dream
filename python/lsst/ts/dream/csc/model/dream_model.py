@@ -22,8 +22,8 @@
 __all__ = ["DreamModel"]
 
 import asyncio
-import logging
 import json
+import logging
 import time
 from typing import Any, Dict, List, Optional, Union
 
@@ -58,7 +58,7 @@ class DreamModel:
         in unit tests.
     """
 
-    def __init__(self, log: logging.Logger = None) -> None:
+    def __init__(self, log: logging.Logger | None = None) -> None:
         if log is None:
             self.log = logging.getLogger(type(self).__name__)
         else:

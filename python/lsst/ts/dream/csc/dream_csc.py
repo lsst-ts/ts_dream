@@ -21,12 +21,14 @@
 
 __all__ = ["DreamCsc", "run_dream"]
 
+import asyncio
 from types import SimpleNamespace
 from typing import Optional
 
-from . import __version__, CONFIG_SCHEMA
-from .model import DreamModel
 from lsst.ts import salobj
+
+from . import CONFIG_SCHEMA, __version__
+from .model import DreamModel
 
 
 class DreamCsc(salobj.ConfigurableCsc):
@@ -50,10 +52,10 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     def __init__(
         self,
-        config_dir: str = None,
+        config_dir: str | None = None,
         initial_state: salobj.State = salobj.State.STANDBY,
         simulation_mode: int = 0,
-        mock_port: int = None,
+        mock_port: int | None = None,
     ) -> None:
         self.config: Optional[SimpleNamespace] = None
         self._config_dir = config_dir
@@ -159,6 +161,7 @@ class DreamCsc(salobj.ConfigurableCsc):
     @staticmethod
     def get_config_pkg() -> str:
         return "ts_config_ocs"
+
 
 def run_dream() -> None:
     asyncio.run(DreamCsc.amain(index=None))

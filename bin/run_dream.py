@@ -25,5 +25,4 @@ import asyncio
 
 from lsst.ts.dream import csc
 
-
 asyncio.run(csc.DreamCsc.amain(index=None))

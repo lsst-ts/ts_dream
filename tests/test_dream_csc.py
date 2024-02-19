@@ -24,7 +24,7 @@
 import logging
 import unittest
 
-from lsst.ts import salobj, dream
+from lsst.ts import dream, salobj
 
 STD_TIMEOUT = 2  # standard command timeout (sec)
 

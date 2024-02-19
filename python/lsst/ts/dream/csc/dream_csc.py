@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["DreamCsc"]
+__all__ = ["DreamCsc", "run_dream"]
 
 from types import SimpleNamespace
 from typing import Optional
@@ -159,3 +159,6 @@ class DreamCsc(salobj.ConfigurableCsc):
     @staticmethod
     def get_config_pkg() -> str:
         return "ts_config_ocs"
+
+def run_dream() -> None:
+    asyncio.run(DreamCsc.amain(index=None))

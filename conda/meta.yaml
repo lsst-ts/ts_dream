@@ -7,7 +7,7 @@ source:
   path: ../
 
 build:
-  script: python -m pip install --no-deps --ignore-installed .
+  script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
   script_env:
     - PATH
     - PYTHONPATH
@@ -17,6 +17,8 @@ build:
     - PYTHON_BUILD_LOCATION
     - TS_CONFIG_OCS_DIR
     - LSST_DDS_DOMAIN
+  entry_points:
+    - run_dream = lsst.ts.dream.csc:run_dream
 
 test:
   requires:

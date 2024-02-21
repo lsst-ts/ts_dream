@@ -43,7 +43,7 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.srv: MockDream = MockDream(host="0.0.0.0", port=0)
         await self.srv.start_task
-        self.assertTrue(self.srv.server.is_serving())
+        self.assertTrue(self.srv._server.is_serving())
 
         self.model = DreamModel(log=self.log)
         await self.model.connect(host=tcpip.LOCAL_HOST, port=self.srv.port)
@@ -68,8 +68,8 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_functions_without_param(self):
         for func in [
             self.model.resume,
-            self.model.open_hatch,
-            self.model.close_hatch,
+            self.model.open_roof,
+            self.model.close_roof,
             self.model.stop,
             self.model.data_archived,
         ]:

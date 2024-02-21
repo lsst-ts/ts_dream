@@ -28,7 +28,7 @@ import time
 import unittest
 
 from lsst.ts import tcpip
-from lsst.ts.dream.csc import MockDream
+from lsst.ts.dream.csc.mock import MockDream
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -44,7 +44,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
 
         self.srv: MockDream = MockDream(host="0.0.0.0", port=0)
         await self.srv.start_task
-        self.assertTrue(self.srv.server.is_serving())
+        self.assertTrue(self.srv._server.is_serving())
         self.reader, self.writer = await asyncio.open_connection(
             host=tcpip.LOCAL_HOST, port=self.srv.port
         )
@@ -122,7 +122,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["response"], "OK")
 
     async def test_commands_without_params(self):
-        for command in ["resume", "openHatch", "closeHatch", "stop", "dataArchived"]:
+        for command in ["resume", "openRoof", "closeRoof", "stop", "dataArchived"]:
             await self.verify_command(command=command)
 
     async def test_ready_for_data(self):

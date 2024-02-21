@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This file is part of ts_dream.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
@@ -20,9 +18,3 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-import asyncio
-
-from lsst.ts.dream import csc
-
-asyncio.run(csc.DreamCsc.amain(index=None))

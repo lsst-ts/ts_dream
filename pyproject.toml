@@ -13,6 +13,7 @@ dependencies = [
   "pyyaml",
   "Cython",
   "ts_salobj",
+  "ts_utils",
 ]
 
 [project.scripts]

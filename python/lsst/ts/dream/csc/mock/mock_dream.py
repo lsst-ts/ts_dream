@@ -63,8 +63,8 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
         # command arrives.
         self.dispatch_dict: typing.Dict[str, typing.Callable] = {
             "resume": self.resume,
-            "openHatch": self.open_hatch,
-            "closeHatch": self.close_hatch,
+            "openRoof": self.open_roof,
+            "closeRoof": self.close_roof,
             "stop": self.stop,
             "readyForData": self.set_ready_for_data,
             "dataArchived": self.set_data_archived,
@@ -85,7 +85,7 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
             family=family,
         )
 
-    def connected_callback(self, server: tcpip.OneClientServer) -> None:
+    async def connected_callback(self, server: tcpip.OneClientServer) -> None:
         """A client has connected or disconnected."""
         self.read_loop_task.cancel()
         if server.connected:
@@ -108,8 +108,8 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
         self.log.debug(f"Writing data {data}")
         st = json.dumps({**data})
         self.log.debug(st)
-        self.writer.write(st.encode() + tcpip.TERMINATOR)
-        await self.writer.drain()
+        self._writer.write(st.encode() + tcpip.TERMINATOR)
+        await self._writer.drain()
         self.log.debug("Done")
 
     async def read_loop(self: tcpip.OneClientServer) -> None:
@@ -118,7 +118,7 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
         while self.connected:
             self.log.debug("Waiting for next incoming message.")
             try:
-                line = await self.reader.readuntil(tcpip.TERMINATOR)
+                line = await self._reader.readuntil(tcpip.TERMINATOR)
                 time_command_received = time.time()
                 line = line.decode().strip()
                 self.log.debug(f"Read command line: {line!r}")
@@ -160,11 +160,11 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
         """Indicate that DREAM is permitted to resume automated operations."""
         self.log.info("resume called.")
 
-    async def open_hatch(self) -> None:
+    async def open_roof(self) -> None:
         """Open the hatch if DREAM has evaluated that it is safe to do so."""
         self.log.info("open called.")
 
-    async def close_hatch(self) -> None:
+    async def close_roof(self) -> None:
         """Close the hatch."""
         self.log.info("close called.")
 
@@ -209,3 +209,11 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
 
         """
         self.log.info(f"setWeatherInfo called with param weather_info {weather_info}")
+
+    async def status(self) -> None:
+        """Send the current status of DREAM."""
+        self.log.info("status called.")
+
+    async def new_data_products(self) -> None:
+        """Inform the client that new data products are available."""
+        self.log.info("new_data_products called.")

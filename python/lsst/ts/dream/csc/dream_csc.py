@@ -162,6 +162,14 @@ class DreamCsc(salobj.ConfigurableCsc):
     def get_config_pkg() -> str:
         return "ts_config_ocs"
 
+    async def do_pause(self, data: salobj.BaseMsgType) -> None:
+        # To be implemented later.
+        pass
+
+    async def do_resume(self, data: salobj.BaseMsgType) -> None:
+        # To be implemented later.
+        pass
+
 
 def run_dream() -> None:
     asyncio.run(DreamCsc.amain(index=None))

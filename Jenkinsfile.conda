@@ -1,2 +1,2 @@
 @Library('JenkinsShared')_
-CondaPipeline(["ts_config_ocs"], "ts-dream", "lsst.ts.dream.csc")
+CondaPipeline(["ts_config_ocs"], "ts-dream", "lsst.ts.dream.csc", "noarch")

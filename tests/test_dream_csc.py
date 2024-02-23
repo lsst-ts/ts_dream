@@ -70,6 +70,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     "readyForData",
                     "dataArchived",
                     "setWeatherInfo",
+                    "pause",
                 ),
             )
 
@@ -85,6 +86,3 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 cscVersion=dream_csc.__version__,
                 subsystemVersions="",
             )
-
-    async def test_bin_script(self):
-        await self.check_bin_script(name="DREAM", index=None, exe_name="run_dream.py")

@@ -22,12 +22,12 @@
 __all__ = ["DreamModel"]
 
 import asyncio
-import logging
 import json
+import logging
 import time
 from typing import Any, Dict, List, Optional, Union
 
-from lsst.ts import salobj, tcpip
+from lsst.ts import tcpip, utils
 
 """Standard timeout in seconds for socket connections."""
 SOCKET_TIMEOUT = 5
@@ -58,7 +58,7 @@ class DreamModel:
         in unit tests.
     """
 
-    def __init__(self, log: logging.Logger = None) -> None:
+    def __init__(self, log: logging.Logger | None = None) -> None:
         if log is None:
             self.log = logging.getLogger(type(self).__name__)
         else:
@@ -68,7 +68,7 @@ class DreamModel:
         self.read_loop: Optional[asyncio.Future] = None
         self.sent_commands: List[int] = []
         self.received_cmd_ids: List[int] = []
-        self.index_generator = salobj.index_generator()
+        self.index_generator = utils.index_generator()
 
     async def connect(self, host: str, port: int) -> None:
         """Connect to the server.
@@ -173,11 +173,11 @@ class DreamModel:
     async def resume(self) -> None:
         await self.write(command="resume")
 
-    async def open_hatch(self) -> None:
-        await self.write(command="openHatch")
+    async def open_roof(self) -> None:
+        await self.write(command="openRoof")
 
-    async def close_hatch(self) -> None:
-        await self.write(command="closeHatch")
+    async def close_roof(self) -> None:
+        await self.write(command="closeRoof")
 
     async def stop(self) -> None:
         await self.write(command="stop")

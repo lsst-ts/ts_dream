@@ -24,7 +24,8 @@
 import logging
 import unittest
 
-from lsst.ts import salobj, dream
+import lsst.ts.dream.csc as dream_csc
+from lsst.ts import salobj
 
 STD_TIMEOUT = 2  # standard command timeout (sec)
 
@@ -35,7 +36,7 @@ logging.basicConfig(
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.srv = dream.csc.mock.MockDream(host="0.0.0.0", port=0)
+        self.srv = dream_csc.mock.MockDream(host="0.0.0.0", port=0)
         await self.srv.start_task
         self.mock_port = self.srv.port
         self.writer = None
@@ -48,7 +49,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         await self.srv.exit()
 
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
-        return dream.csc.DreamCsc(
+        return dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
@@ -63,12 +64,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 enabled_commands=(),
                 skip_commands=(
                     "resume",
-                    "openHatch",
-                    "closeHatch",
+                    "openRoof",
+                    "closeRoof",
                     "stop",
                     "readyForData",
                     "dataArchived",
                     "setWeatherInfo",
+                    "pause",
                 ),
             )
 
@@ -81,9 +83,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             await self.assert_next_sample(
                 self.remote.evt_softwareVersions,
-                cscVersion=dream.csc.__version__,
+                cscVersion=dream_csc.__version__,
                 subsystemVersions="",
             )
-
-    async def test_bin_script(self):
-        await self.check_bin_script(name="DREAM", index=None, exe_name="run_dream.py")

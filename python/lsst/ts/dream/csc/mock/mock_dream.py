@@ -62,13 +62,11 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
         # Dict of command: function to look up which funtion to call when a
         # command arrives.
         self.dispatch_dict: typing.Dict[str, typing.Callable] = {
-            "resume": self.resume,
-            "openRoof": self.open_roof,
-            "closeRoof": self.close_roof,
-            "stop": self.stop,
-            "readyForData": self.set_ready_for_data,
-            "dataArchived": self.set_data_archived,
-            "setWeatherInfo": self.set_weather_info,
+            "getStatus": self.get_status,
+            "getNewDataProducts": self.get_new_data_products,
+            "setWeather": self.set_weather,
+            "setRoof": self.set_roof,
+            "heartbeat": self.heartbeat,
         }
 
         # Weather information data used for determining whether the hatch can
@@ -123,25 +121,32 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
                 line = line.decode().strip()
                 self.log.debug(f"Read command line: {line!r}")
                 items = json.loads(line)
-                cmd = items["command"]
-                cmd_id = items["cmd_id"]
-                # time_command_sent = items["time_command_sent"]
-                kwargs = {}
-                if "parameters" in items:
-                    kwargs = items["parameters"]
-                if cmd not in self.dispatch_dict:
-                    raise KeyError(f"Invalid command {cmd} received.")
-                else:
-                    func = self.dispatch_dict[cmd]
-                    await func(**kwargs)
+                action = items["action"]
+                request_id = items["request_id"]
+                if action not in self.dispatch_dict:
                     await self.write(
                         {
-                            "cmd_id": cmd_id,
-                            "time_command_received": time_command_received,
-                            "time_ack_sent": time.time(),
-                            "response": "OK",
+                            "result": "error",
+                            "reason": f"Unknown action {action}",
                         }
                     )
+                else:
+                    func = self.dispatch_dict[action]
+                    result_json = await func(items["data"] if "data" in items else None)
+                    await self.write(
+                        result_json | {
+                            "request_id": request_id,
+                            "result": "ok",
+                        }
+                    )
+
+            except KeyError as e:
+                await self.write(
+                    {
+                        "result": "error",
+                        "reason": f"Invalid request: a mandatory key is missing: {e.args[0]}",
+                    }
+                )
 
             except asyncio.IncompleteReadError:
                 self.log.exception("Read error encountered. Retrying.")
@@ -156,64 +161,129 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
         await self.close()
         self.log.info("Done closing")
 
-    async def resume(self) -> None:
-        """Indicate that DREAM is permitted to resume automated operations."""
-        self.log.info("resume called.")
-
-    async def open_roof(self) -> None:
-        """Open the hatch if DREAM has evaluated that it is safe to do so."""
-        self.log.info("open called.")
-
-    async def close_roof(self) -> None:
-        """Close the hatch."""
-        self.log.info("close called.")
-
-    async def stop(self) -> None:
-        """Immediately stop operations and close the hatch."""
-        self.log.info("stop called.")
-
-    async def set_ready_for_data(self, ready: bool) -> None:
-        """Inform DREAM that Rubin Observatory is ready to receive data as
-        indicated.
+    async def get_status(self, data: bool | None) -> dict:
+        """Returns status information for DREAM.
 
         Parameters
         ----------
-        ready: `bool`
-            Rubin Observatory is ready to receive data (True) or not (False).
+        data : bool | None
+            Payload data sent to the command. This is
+            ignored for this command, but providing
+            extra data will not cause an error or
+            any other change in behavior.
+
+        Returns
+        -------
+        dict
+            Data to be added to the response.
+            The added data is a "msg_type",
+            which is "status", and a summary
+            dictionary.
         """
-        self.log.info(f"readyForData called with param ready {ready}")
+        self.log.info("get_status called.")
 
-    async def set_data_archived(self) -> None:
-        """Inform DREAM that Rubin Observatory has received and archived a data
-        product."""
-        self.log.info("dataArchived called.")
+        return {
+            "msg_type": "status",
+            "status": dict(),
+        }
 
-    async def set_weather_info(
-        self, weather_info: typing.Dict[str, typing.Union[float, bool]]
-    ) -> None:
-        """Provide the latest weather information from Rubin Observatory.
+    async def get_new_data_products(self, data: bool | None) -> dict:
+        """Returns a list of new large files that are available.
+
+        Provides a list of new files as a "new_products"
+        key in the dictionary. This key contains a list
+        of dictionaries, with one item on the list for
+        each new file.
 
         Parameters
         ----------
-        weather_info: `dict`
-            The weather info as provided by Rubin Observatory. The contents are
+        data : bool | None
+            Payload data sent to the command. This is
+            ignored for this command, but providing
+            extra data will not cause an error or
+            any other change in behavior.
 
-            - temperature: `float` (ºC)
-            - humidity: `float` (0 - 100%)
-            - wind_speed: `float` (m/s)
-            - wind_direction: `float` (0 - 360º azimuth)
-            - pressure: `float` (Pa)
-            - rain: `float` (>= 0 mm)
-            - cloudcover: `float` (0 - 100%)
-            - safe_observing_conditions: `bool` (True or False)
-
+        Returns
+        -------
+        dict
+            Extra dictionary keys to be sent in
+            the response. The added keys are
+            "msg_type", which is "list",
+            and "new_products", a list
+            of zero or more dictionaries.
         """
-        self.log.info(f"setWeatherInfo called with param weather_info {weather_info}")
+        self.log.info("get_new_data_products called.")
+        return {
+            "msg_type": "list",
+            "new_products": [],
+        }
 
-    async def status(self) -> None:
-        """Send the current status of DREAM."""
-        self.log.info("status called.")
+    async def set_weather(self, data: bool | None) -> dict:
+        """Sets the weather status bit.
 
-    async def new_data_products(self) -> None:
-        """Inform the client that new data products are available."""
-        self.log.info("new_data_products called.")
+        If the payload data is True, then weather is OK
+        and DREAM may observer. Otherwise DREAM should
+        close down.
+
+        Parameters
+        ----------
+        data : bool | None
+            Whether the weather is OK for DREAM observing.
+            Must be bool; failing to send data will
+            return an error message.
+
+        Returns
+        -------
+        dict
+            Extra information to add to a success response.
+            (But there is none in the case of this
+            command, so it returns an empty dictionary.)
+        """
+        self.log.info("set_weather called.")
+        return dict()
+
+    async def set_roof(self, data: bool | None) -> dict:
+        """Sets the roof status (open or closed)
+
+        If the payload data is True, then the roof may open
+        and DREAM may observe. If False, the roof should
+        close.
+
+        Parameters
+        ----------
+        data : bool | None
+            Whether the roof may open. Bool is expected
+            and setting data to None will send
+            an error response back to the client.
+
+        Returns
+        -------
+        dict[str, str]
+            Extra information to add to a success response.
+            (But there is none in the case of this
+            command, so it returns an empty dictionary.)
+        """
+        self.log.info("set_roof called.")
+        return dict()
+
+    async def heartbeat(self, data: bool | None) -> dict:
+        """Sends an empty response to the client.
+
+        This function can be used to confirm that the server
+        is still alive.
+
+        Parameters
+        ----------
+        data : bool | None
+            No data associated with this command. The argument
+            is ignored, but extra data does not cause an error.
+
+        Returns
+        -------
+        dict[str, str]
+            Extra information to add to a success response.
+            (But there is none in the case of this
+            command, so it returns an empty dictionary.)
+        """
+        self.log.info("heartbeat called.")
+        return dict()

@@ -29,10 +29,9 @@ import time
 import typing
 
 from lsst.ts import tcpip
-from lsst.ts.dream import common
 
 
-class MockDream(tcpip.OneClientServer, common.AbstractDream):
+class MockDream(tcpip.OneClientServer):
     """A mock DREAM server for exchanging messages that talks over TCP/IP.
 
     Upon initiation a socket server is set up which waits for incoming
@@ -117,7 +116,6 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
             self.log.debug("Waiting for next incoming message.")
             try:
                 line = await self._reader.readuntil(tcpip.TERMINATOR)
-                time_command_received = time.time()
                 line = line.decode().strip()
                 self.log.debug(f"Read command line: {line!r}")
                 items = json.loads(line)
@@ -126,6 +124,7 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
                 if action not in self.dispatch_dict:
                     await self.write(
                         {
+                            "request_id": request_id,
                             "result": "error",
                             "reason": f"Unknown action {action}",
                         }
@@ -134,9 +133,10 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
                     func = self.dispatch_dict[action]
                     result_json = await func(items["data"] if "data" in items else None)
                     await self.write(
-                        result_json | {
+                        {
                             "request_id": request_id,
                             "result": "ok",
+                            **result_json,
                         }
                     )
 
@@ -148,7 +148,7 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
                     }
                 )
 
-            except asyncio.IncompleteReadError:
+            except asyncio.exceptions.IncompleteReadError:
                 self.log.exception("Read error encountered. Retrying.")
 
     async def disconnect(self) -> None:
@@ -240,6 +240,11 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
             command, so it returns an empty dictionary.)
         """
         self.log.info("set_weather called.")
+        if data is None:
+            return {
+                "result": "error",
+                "reason": "data required",
+            }
         return dict()
 
     async def set_roof(self, data: bool | None) -> dict:
@@ -264,6 +269,11 @@ class MockDream(tcpip.OneClientServer, common.AbstractDream):
             command, so it returns an empty dictionary.)
         """
         self.log.info("set_roof called.")
+        if data is None:
+            return {
+                "result": "error",
+                "reason": "data required",
+            }
         return dict()
 
     async def heartbeat(self, data: bool | None) -> dict:

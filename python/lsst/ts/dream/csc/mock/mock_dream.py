@@ -25,11 +25,120 @@ import asyncio
 import json
 import logging
 import socket
-import time
 import typing
 
 from lsst.ts import tcpip
 
+_dream_status = """
+{
+  "status": {
+    "target_observing_mode": "IDLE",
+    "actual_observing_mode": "IDLE",
+    "target_dome_state": "STOP",
+    "actual_dome_state": "STOP",
+    "target_heater_state": "OFF",
+    "actual_heater_state": "OFF",
+    "target_peltier_state": "OFF",
+    "actual_peltier_state": "OFF",
+    "temp_hum": {
+      "electronics_top": {
+        "temperature": 25.76363921680424,
+        "humidity": 50.671024074507606
+      },
+      "camera_bay": {
+        "temperature": 25.960600848565594,
+        "humidity": 50.380806542848525
+      },
+      "electronics_box": {
+        "temperature": 25.842814592491973,
+        "humidity": 50.311423547799194
+      },
+      "rack_top": {
+        "temperature": 25.148454997628154,
+        "humidity": 50.35500642777455
+      },
+      "rack_bottom": {
+        "temperature": 25.177524512769548,
+        "humidity": 50.548822284540506
+      },
+      "dream_inlet": {
+        "temperature": 25.188939326407745,
+        "humidity": 50.46328238367049
+      }
+    },
+    "pdu_status": {
+      "Switch": true,
+      "USB hub": true,
+      "PSU 1": true,
+      "PSU 2": true,
+      "Central Camera": true,
+      "North Camera": true,
+      "East Camera": true,
+      "Command Server": true,
+      "Central Server": true,
+      "North Server": true,
+      "East Server": true,
+      "South Server": true,
+      "West Server": true,
+      "South Camera": true,
+      "West Camera": true
+    },
+    "ups_status": {
+      "ups_status": "ONLINE",
+      "battery_charge": 100,
+      "battery_temperature": 30.053783855218214,
+      "battery_voltage": 48.95089981581298,
+      "battery_remaining": 50,
+      "battery_needs_replacing": false,
+      "input_last_error": "no error",
+      "output_load": 25.514144279491916,
+      "output_current": 2.4332511053654104,
+      "last_online": 1728426033.012355
+    },
+    "psu_status": {
+      "temp_error": false,
+      "input_error": false,
+      "voltage_feedback": 0.04051622113408792,
+      "current_feedback": 0.0008196898088569571,
+      "voltage_setpoint": 0,
+      "current_setpoint": 20
+    },
+    "limit_switches": {
+      "front_door": "hit",
+      "back_door": "hit",
+      "dome_open": "not hit",
+      "dome_closed": "not hit"
+    },
+    "electronics": {
+      "motor_relay": "off",
+      "motor_dir": "closing",
+      "peltier_relay": "off",
+      "peltier_dir": "heating",
+      "window_heaters": "off"
+    },
+    "dome_position": 110,
+    "errors": [
+      "Dome should be closed but it is not"
+    ],
+    "warnings": [
+      "North camera not connected",
+      "East camera not connected",
+      "South camera not connected",
+      "Dome movements are simulated",
+      "Temp/humidity sensors are simulated",
+      "LEDs are simulated",
+      "User stopped dome movement",
+      "More than 1 client on rubin socket",
+      "PDU is simulated",
+      "West camera not connected",
+      "Center camera not connected",
+      "Dome opening blocked by sun alt",
+      "UPS is simulated"
+    ],
+    "cameras": {}
+  }
+}
+"""
 
 class MockDream(tcpip.OneClientServer):
     """A mock DREAM server for exchanging messages that talks over TCP/IP.
@@ -184,7 +293,7 @@ class MockDream(tcpip.OneClientServer):
 
         return {
             "msg_type": "status",
-            "status": dict(),
+            "status": json.loads(_dream_status),
         }
 
     async def get_new_data_products(self, data: bool | None) -> dict:

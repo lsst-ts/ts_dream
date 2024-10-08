@@ -7,15 +7,14 @@ source:
   path: ../
 
 build:
-  noarch: generic
+  noarch: python
   script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
   entry_points:
     - run_dream = lsst.ts.dream.csc:run_dream
 
 test:
   requires:
-    - ts-conda-build
-    - ts-dream-common
+    - ts-conda-build =0.4
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
     - ts-tcpip
@@ -41,8 +40,6 @@ requirements:
     - python
     - setuptools
     - setuptools_scm
-    - ts-dream-common
-    - ts-idl
     - ts-salobj
     - ts-tcpip
     - ts-xml

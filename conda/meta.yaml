@@ -1,6 +1,6 @@
 {% set data= load_setup_py_data() %}
 package:
-  name: "ts-dream"
+  name: ts-dream
   version: {{ data.get('version') }}
 
 source:
@@ -9,38 +9,33 @@ source:
 build:
   noarch: python
   script: {{ PYTHON }} -m pip install --no-deps --ignore-installed .
-  entry_points:
-    - run_dream = lsst.ts.dream.csc:run_dream
 
 test:
   requires:
     - ts-conda-build =0.4
     - ts-idl {{ idl_version }}
     - ts-salobj {{ salobj_version }}
-    - ts-tcpip
-    - ts-xml
   source_files:
     - python
+    - bin
     - tests
+    - pyproject.toml
   commands:
     - pytest
 
 requirements:
   host:
-    - python
+    - python  {{ python }}
     - pip
     - setuptools_scm
     - setuptools
-    - pytest-runner
   build:
     - python {{ python }}
     - setuptools_scm
     - setuptools
   run:
-    - python
+    - python {{ python }}
     - setuptools
     - setuptools_scm
-    - ts-idl
     - ts-salobj
-    - ts-tcpip
-    - ts-xml
+    - ts-idl

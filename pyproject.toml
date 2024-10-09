@@ -9,6 +9,9 @@ license = { text = "GPL" }
 classifiers = [ "Programming Language :: Python :: 3" ]
 urls = { documentation = "https://ts-dream.lsst.io", source_code = "https://github.com/lsst-ts/ts_dream" }
 dynamic = ["version"]
+dependencies = [
+    "ts_tcpip",
+]
 
 [tool.setuptools.dynamic]
 version = { attr = "setuptools_scm.get_version" }
@@ -31,4 +34,4 @@ __version__ = "{version}"
 asyncio_mode = "auto"
 
 [project.optional-dependencies]
-dev = ["pytest", "black", "flake8", "documenteer[pipelines]"]
+dev = ["documenteer[pipelines]"]

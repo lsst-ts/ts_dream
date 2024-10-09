@@ -140,6 +140,7 @@ _dream_status = """
 }
 """
 
+
 class MockDream(tcpip.OneClientServer):
     """A mock DREAM server for exchanging messages that talks over TCP/IP.
 

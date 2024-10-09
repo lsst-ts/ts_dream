@@ -120,8 +120,16 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data["result"], "error")
 
     async def test_commands_without_params(self):
-        for action in ["getStatus", "getNewDataProducts", "setWeather", "setRoof", "heartbeat"]:
-            await self.verify_command(action=action, data=True)  # Some commands require "data".
+        for action in [
+            "getStatus",
+            "getNewDataProducts",
+            "setWeather",
+            "setRoof",
+            "heartbeat",
+        ]:
+            await self.verify_command(
+                action=action, data=True
+            )  # Some commands require "data".
 
     async def test_heartbeat(self):
         await self.verify_command(action="heartbeat")

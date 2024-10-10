@@ -24,6 +24,7 @@
 import asyncio
 import json
 import logging
+import random
 import unittest
 
 from lsst.ts import tcpip
@@ -32,6 +33,8 @@ from lsst.ts.dream.csc.mock import MockDream
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
 )
+
+random.seed(42)
 
 """Standard timeout in seconds."""
 TIMEOUT = 5
@@ -111,7 +114,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def verify_error(self, action, **kwargs):
         self.assertTrue(self.srv.connected)
-        request_id = 1
+        request_id = random.randint(2, 5000)
         await self.write(action=action, request_id=request_id, **kwargs)
         # Give time to the socket server to process the command.
         await asyncio.sleep(0.5)

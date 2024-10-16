@@ -104,7 +104,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             Command ID and data
         """
         await super().begin_enable(id_data)
-        self.cmd_enable.ack_in_progress(id_data, timeout=60)
+        await self.cmd_enable.ack_in_progress(id_data, timeout=60)
 
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
@@ -132,7 +132,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         id_data: `CommandIdData`
             Command ID and data
         """
-        self.cmd_disable.ack_in_progress(id_data, timeout=60)
+        await self.cmd_disable.ack_in_progress(id_data, timeout=60)
         await super().begin_disable(id_data)
 
     async def disconnect(self) -> None:

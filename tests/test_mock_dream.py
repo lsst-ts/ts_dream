@@ -24,7 +24,7 @@
 import asyncio
 import json
 import logging
-import time
+import random
 import unittest
 
 from lsst.ts import tcpip
@@ -33,6 +33,8 @@ from lsst.ts.dream.csc.mock import MockDream
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
 )
+
+random.seed(42)
 
 """Standard timeout in seconds."""
 TIMEOUT = 5
@@ -96,51 +98,57 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0.5)
         self.assertFalse(self.srv.connected)
 
-    async def verify_command(self, command, parameters=None):
+    async def verify_command(self, action, **kwargs):
         self.assertTrue(self.srv.connected)
-        cmd_id = 1
-        time_command_sent = time.time()
-        if parameters:
-            await self.write(
-                command=command,
-                cmd_id=cmd_id,
-                time_command_sent=time_command_sent,
-                parameters=parameters,
-            )
-        else:
-            await self.write(
-                command=command,
-                cmd_id=cmd_id,
-                time_command_sent=time_command_sent,
-            )
+        request_id = 1
+        await self.write(
+            action=action,
+            request_id=request_id,
+            **kwargs,
+        )
         # Give time to the socket server to process the command.
         await asyncio.sleep(0.5)
         data = await self.read()
-        self.assertEqual(data["cmd_id"], cmd_id)
-        self.assertGreater(data["time_command_received"], time_command_sent)
-        self.assertGreater(data["time_ack_sent"], data["time_command_received"])
-        self.assertEqual(data["response"], "OK")
+        self.assertEqual(data["request_id"], request_id)
+        self.assertEqual(data["result"], "ok")
+
+    async def verify_error(self, action, **kwargs):
+        self.assertTrue(self.srv.connected)
+        request_id = random.randint(2, 5000)
+        await self.write(action=action, request_id=request_id, **kwargs)
+        # Give time to the socket server to process the command.
+        await asyncio.sleep(0.5)
+        data = await self.read()
+        self.assertEqual(data["request_id"], request_id)
+        self.assertEqual(data["result"], "error")
 
     async def test_commands_without_params(self):
-        for command in ["resume", "openRoof", "closeRoof", "stop", "dataArchived"]:
-            await self.verify_command(command=command)
+        for action in [
+            "getStatus",
+            "getNewDataProducts",
+            "setWeather",
+            "setRoof",
+            "heartbeat",
+        ]:
+            await self.verify_command(
+                action=action, data=True
+            )  # Some commands require "data".
 
-    async def test_ready_for_data(self):
-        await self.verify_command(command="readyForData", parameters={"ready": False})
+    async def test_heartbeat(self):
+        await self.verify_command(action="heartbeat")
 
-    async def test_set_weather_info(self):
-        await self.verify_command(
-            command="setWeatherInfo",
-            parameters={
-                "weather_info": {
-                    "temperature": 5.7,
-                    "humidity": 15,
-                    "wind_speed": 12,
-                    "wind_direction": 334,
-                    "pressure": 101320,
-                    "rain": 0,
-                    "cloudcover": 0,
-                    "safe_observing_conditions": True,
-                }
-            },
-        )
+    async def test_set_weather(self):
+        await self.verify_error(action="setWeather")
+        await self.verify_command(action="setWeather", data=True)
+        await self.verify_command(action="setWeather", data=False)
+
+    async def test_set_roof(self):
+        await self.verify_error(action="setRoof")
+        await self.verify_command(action="setRoof", data=True)
+        await self.verify_command(action="setRoof", data=False)
+
+    async def test_get_new_data_products(self):
+        await self.verify_command(action="getNewDataProducts")
+
+    async def test_get_status(self):
+        await self.verify_command(action="getStatus")

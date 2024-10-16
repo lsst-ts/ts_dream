@@ -24,7 +24,6 @@ __all__ = ["DreamModel"]
 import asyncio
 import json
 import logging
-import time
 from typing import Any, Dict, List, Optional, Union
 
 from lsst.ts import tcpip, utils
@@ -122,19 +121,17 @@ class DreamModel:
         if not self.writer or not self.connected:
             raise RuntimeError("Not connected")
 
-        cmd_id: int = next(self.index_generator)
-        time_command_sent: float = time.time()
+        request_id: int = next(self.index_generator)
         st = json.dumps(
             {
-                "command": command,
-                "cmd_id": cmd_id,
-                "time_command_sent": time_command_sent,
+                "action": command,
+                "request_id": request_id,
                 **data,
             }
         )
         self.writer.write(st.encode() + tcpip.TERMINATOR)
         await self.writer.drain()
-        self.sent_commands.append(cmd_id)
+        self.sent_commands.append(request_id)
 
     async def _read_loop(self) -> None:
         """Execute a loop that reads incoming data from the SocketServer."""
@@ -142,20 +139,23 @@ class DreamModel:
             while True:
                 data = await self.read()
                 self.log.info(f"Received data {data!r}")
-                if "cmd_id" in data:
-                    if not data["cmd_id"] in self.sent_commands:
+                if "request_id" in data:
+                    if data["request_id"] not in self.sent_commands:
                         self.log.error(
-                            f"Received a reply to an unknown cmd ID {data['cmd_id']}."
+                            f"Received a reply to an unknown cmd ID {data['request_id']}."
                         )
                     else:
                         # TODO Properly handle command execution tracing.
-                        self.received_cmd_ids.append(data["cmd_id"])
-                        self.sent_commands.remove(data["cmd_id"])
+                        self.received_cmd_ids.append(data["request_id"])
+                        self.sent_commands.remove(data["request_id"])
                 else:
                     # TODO implement handling of messages from DREAM
                     pass
+        except tcpip.IncompleteReadError:
+            self.log.info("Connection closed by server")
         except Exception:
             self.log.exception("_read_loop failed")
+            raise
 
     async def disconnect(self) -> None:
         """Disconnect, if connected."""

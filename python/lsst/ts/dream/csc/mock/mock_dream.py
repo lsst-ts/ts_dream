@@ -213,7 +213,7 @@ class MockDream(tcpip.OneClientServer):
             The data to write.
         """
         self.log.debug(f"Writing data {data}")
-        st = json.dumps({**data})
+        st = json.dumps(data)
         self.log.debug(st)
         self._writer.write(st.encode() + tcpip.TERMINATOR)
         await self._writer.drain()

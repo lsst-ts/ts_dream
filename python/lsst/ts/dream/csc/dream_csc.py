@@ -123,7 +123,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         if self.simulation_mode == 1:
             if self.mock_port is None:
-                self.mock = MockDream(host=None, port=0)
+                self.mock = MockDream(host="127.0.0.1", port=0)
                 await self.mock.start_task
                 port = self.mock.port
                 self.log.info(f"Mock started on port {port}")

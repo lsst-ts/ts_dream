@@ -96,6 +96,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         # Initialize to a client that is already closed, to avoid
         # having to test for "is None".
         self.client = tcpip.Client(host="", port=0, log=self.log)
+        self.log.info("DREAM CSC.")
 
     async def connect(self) -> None:
         """Determine if running in local or remote mode and dispatch to the
@@ -121,23 +122,24 @@ class DreamCsc(salobj.ConfigurableCsc):
         host: str = self.config.host
         port: int = self.config.port
 
-        if self.simulation_mode == 1:
-            if self.mock_port is None:
-                self.mock = MockDream(host="127.0.0.1", port=0)
-                await self.mock.start_task
-                port = self.mock.port
-                self.log.info(f"Mock started on port {port}")
-            else:
-                port = self.mock_port
-                self.log.info(f"Using mock on port {port}")
-
         try:
-            async with self.cmd_lock:
-                self.client = tcpip.Client(host=host, port=port, log=self.log)
-                await asyncio.wait_for(
-                    self.client.start_task, timeout=self.config.connection_timeout
-                )
-            self.log.debug("Connected to DREAM")
+            if self.simulation_mode == 1:
+                if self.mock_port is None:
+                    self.mock = MockDream(host="127.0.0.1", port=0)
+                    await self.mock.start_task
+                    port = self.mock.port
+                    self.log.info(f"Mock started on port {port}")
+                else:
+                    port = self.mock_port
+                    self.log.info(f"Using mock on port {port}")
+
+                async with self.cmd_lock:
+                    self.client = tcpip.Client(host=host, port=port, log=self.log)
+                    await asyncio.wait_for(
+                        self.client.start_task, timeout=self.config.connection_timeout
+                    )
+                self.log.debug("Connected to DREAM")
+
         except Exception as e:
             err_msg = f"Could not open connection to host={host}, port={port}: {e!r}"
             self.log.exception(err_msg)

@@ -24,6 +24,7 @@ __all__ = ["DreamCsc", "run_dream"]
 import asyncio
 import enum
 import json
+import logging
 import time
 from types import SimpleNamespace
 from typing import Any, Optional
@@ -91,6 +92,9 @@ class DreamCsc(salobj.ConfigurableCsc):
             initial_state=initial_state,
             simulation_mode=simulation_mode,
         )
+
+        ch = logging.StreamHandler()
+        self.log.addHandler(ch)
 
         # TCP/IP client for the low-level controller.
         # Initialize to a client that is already closed, to avoid

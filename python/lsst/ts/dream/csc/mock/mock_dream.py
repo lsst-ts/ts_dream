@@ -259,7 +259,9 @@ class MockDream(tcpip.OneClientServer):
                 )
 
             except asyncio.exceptions.IncompleteReadError:
-                self.log.exception("Read error encountered. Retrying.")
+                self.log.info(
+                    "Read error encountered, probably because the connection was closed."
+                )
 
     async def disconnect(self) -> None:
         """Disconnect the client."""

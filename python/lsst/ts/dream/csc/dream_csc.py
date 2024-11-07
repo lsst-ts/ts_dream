@@ -23,16 +23,16 @@ __all__ = ["DreamCsc", "run_dream"]
 
 import asyncio
 import enum
-import json
 import logging
 import time
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Optional
 
-from lsst.ts import salobj, tcpip, utils
+from lsst.ts import salobj, utils
 
 from . import CONFIG_SCHEMA, __version__
 from .mock import MockDream
+from .model import DreamModel
 
 
 class ErrorCode(enum.IntEnum):
@@ -80,10 +80,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.last_weather_update: float = 0.0
         self.weather_ok_flag: Optional[bool] = None
 
-        # TCP items
-        self.cmd_lock = asyncio.Lock()
-        self.last_request_id = 0
-
         super().__init__(
             name="DREAM",
             index=0,
@@ -96,11 +92,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         ch = logging.StreamHandler()
         self.log.addHandler(ch)
 
-        # TCP/IP client for the low-level controller.
-        # Initialize to a client that is already closed, to avoid
-        # having to test for "is None".
-        self.client = tcpip.Client(host="", port=0, log=self.log)
-        self.log.info("DREAM CSC.")
+        self.model: Optional[DreamModel] = None
 
     async def connect(self) -> None:
         """Determine if running in local or remote mode and dispatch to the
@@ -137,12 +129,9 @@ class DreamCsc(salobj.ConfigurableCsc):
                     port = self.mock_port
                     self.log.info(f"Using mock on port {port}")
 
-                async with self.cmd_lock:
-                    self.client = tcpip.Client(host=host, port=port, log=self.log)
-                    await asyncio.wait_for(
-                        self.client.start_task, timeout=self.config.connection_timeout
-                    )
-                self.log.debug("Connected to DREAM")
+            if self.model is None:
+                self.model = DreamModel(config=self.config, log=self.log)
+            await self.model.connect(host=host, port=port)
 
         except Exception as e:
             err_msg = f"Could not open connection to host={host}, port={port}: {e!r}"
@@ -200,7 +189,9 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.log.info("Disconnecting")
         self.weather_sleep_task.cancel()
         await self.weather_loop_task
-        await self.client.close()
+        if self.model is not None:
+            await self.model.disconnect()
+        self.model = None
         if self.mock:
             await self.mock.close()
             self.mock = None
@@ -210,12 +201,9 @@ class DreamCsc(salobj.ConfigurableCsc):
         """Override of the handle_summary_state function to connect or
         disconnect to the DREAM CSC (or the mock client) when needed.
         """
-        self.log.info(f"handle_summary_state {salobj.State(self.summary_state).name}")
-        if self.disabled_or_enabled:
-            if not self.connected:
-                await self.connect()
-            else:
-                await self.disconnect()
+        self.log.info(
+            f"handle_summary_state {salobj.State(self.summary_state).name} [{self.connected=}]"
+        )
 
     async def configure(self, config: SimpleNamespace) -> None:
         self.config = config
@@ -232,7 +220,9 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     @property
     def connected(self) -> bool:
-        return self.client.connected
+        if self.model is None:
+            return False
+        return self.model.connected
 
     @staticmethod
     def get_config_pkg() -> str:
@@ -252,7 +242,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         A weather flag is sent when the weather has changed, or every ten
         minutes.
         """
-        while self.client.connected:
+        while self.model is not None and self.model.connected:
             if self.simulation_mode == 0:
                 await self.connect_ess_remote()  # Connect to ESS if not already connected
                 if self.ess_remote is None:
@@ -290,15 +280,17 @@ class DreamCsc(salobj.ConfigurableCsc):
             ):
                 try:
                     # Send weather flag
-                    await self.write_json(
-                        {
-                            "action": "setWeather",
-                            "data": weather_ok_flag,
-                        }
-                    )
-                    self.last_weather_update = time.time()
-                    self.weather_ok_flag = weather_ok_flag
+                    if self.model is not None:
+                        await self.model.set_weather_ok(weather_ok_flag)
+                        self.last_weather_update = time.time()
+                        self.weather_ok_flag = weather_ok_flag
+                    else:
+                        self.log.info(
+                            "Weather loop ending because of TCP disconnection."
+                        )
+                        return
                 except asyncio.CancelledError:
+                    self.log.info("Weather loop ending because of asycio cancel.")
                     return
                 except Exception:
                     self.log.exception("Failed to send weather flag!")
@@ -310,23 +302,8 @@ class DreamCsc(salobj.ConfigurableCsc):
                 )
                 await self.weather_sleep_task
             except asyncio.CancelledError:
+                self.log.info("Weather loop ending because of asyncio cancel.")
                 return
-
-    async def write_json(self, payload: Any) -> None:
-        """Sends a JSON object to the DREAM listener."""
-
-        assert self.config is not None
-        assert "request_id" not in payload
-
-        async with self.cmd_lock:
-            self.last_request_id += 1
-            payload["request_id"] = self.last_request_id
-            await self.client.write_json(payload)
-            response = await asyncio.wait_for(
-                self.client.read_json(), timeout=self.config.read_timeout
-            )
-            self.log.error(json.dumps(response))
-            return response
 
 
 def run_dream() -> None:

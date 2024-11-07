@@ -124,6 +124,12 @@ class DreamModel:
             raise RuntimeError(
                 f"Received unexpected request_id: {response['request_id']}"
             )
+        if "result" not in response:
+            self.log.error("Required key 'result' not found in response from DREAM")
+            raise RuntimeError("Required key 'result' not found in response from DREAM")
+        if response["result"] != "ok":
+            self.log.error(f"Error response from DREAM. Full response: {response}")
+            raise RuntimeError(f"Error response from DREAM. Full response: {response}")
 
         return response
 

@@ -94,6 +94,15 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.model: Optional[DreamModel] = None
 
+    async def send_ack_in_progress(self, id_data: salobj.BaseDdsDataType) -> None:
+        """Sends ACK every 0.5 seconds while enabling the CSC."""
+        try:
+            while True:
+                await asyncio.sleep(0.5)
+                self.cmd_enable.ack_in_progress(data=id_data, timeout=10)
+        except asyncio.CancelledError:
+            pass
+
     async def connect(self) -> None:
         """Determine if running in local or remote mode and dispatch to the
         corresponding connect coroutine.
@@ -141,24 +150,11 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.weather_loop_task = asyncio.ensure_future(self.weather_loop())
 
-    async def begin_enable(self, id_data: salobj.BaseDdsDataType) -> None:
-        """Begin do_enable; called before state changes.
-
-        This method sends a CMD_INPROGRESS signal.
-
-        Parameters
-        ----------
-        id_data: `CommandIdData`
-            Command ID and data
-        """
-        await super().begin_enable(id_data)
-        await self.cmd_enable.ack_in_progress(id_data, timeout=60)
-
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
         acknowledged.
 
-        This method connects to the ESS Instrument and starts it.
+        This method connects to the DREAM Instrument and starts it.
 
         Parameters
         ----------
@@ -166,7 +162,9 @@ class DreamCsc(salobj.ConfigurableCsc):
             Command ID and data
         """
         if not self.connected:
+            ack_task = asyncio.create_task(self.send_ack_in_progress(id_data))
             await self.connect()
+            ack_task.cancel()
         await super().end_enable(id_data)
 
     async def begin_disable(self, id_data: salobj.BaseDdsDataType) -> None:
@@ -229,12 +227,11 @@ class DreamCsc(salobj.ConfigurableCsc):
         return "ts_config_ocs"
 
     async def do_pause(self, data: salobj.BaseMsgType) -> None:
-        # To be implemented later.
-        pass
+        await self.disconnect()
 
     async def do_resume(self, data: salobj.BaseMsgType) -> None:
-        # To be implemented later.
-        pass
+        if not self.connected:
+            await self.connect()
 
     async def weather_loop(self) -> None:
         """Periodically checks weather station, and sends a flag if needed.

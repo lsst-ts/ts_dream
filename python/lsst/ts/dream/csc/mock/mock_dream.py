@@ -190,6 +190,7 @@ class MockDream(tcpip.OneClientServer):
             log=self.log,
             connect_callback=self.connected_callback,
             family=family,
+            terminator=b"\n",
         )
 
     async def connected_callback(self, server: tcpip.OneClientServer) -> None:
@@ -201,7 +202,7 @@ class MockDream(tcpip.OneClientServer):
         else:
             self.log.info("Client disconnected.")
 
-    async def write(self, data: dict) -> None:
+    async def write_message(self, data: dict) -> None:
         """Write the data appended with a newline character.
 
         The data are encoded via JSON and then passed on to the StreamWriter
@@ -213,26 +214,20 @@ class MockDream(tcpip.OneClientServer):
             The data to write.
         """
         self.log.debug(f"Writing data {data}")
-        st = json.dumps(data)
-        self.log.debug(st)
-        self._writer.write(st.encode() + tcpip.TERMINATOR)
-        await self._writer.drain()
-        self.log.debug("Done")
+        await self.write_json(data)
 
     async def read_loop(self: tcpip.OneClientServer) -> None:
         """Read commands and output replies."""
-        self.log.info(f"The read_loop begins connected? {self.connected}")
+        self.log.debug(f"The read_loop begins connected? {self.connected}")
         while self.connected:
             self.log.debug("Waiting for next incoming message.")
             try:
-                line = await self._reader.readuntil(tcpip.TERMINATOR)
-                line = line.decode().strip()
-                self.log.debug(f"Read command line: {line!r}")
-                items = json.loads(line)
+                items = await self.read_json()
+                self.log.debug(f"Read from tcp: {items}")
                 action = items["action"]
                 request_id = items["request_id"]
                 if action not in self.dispatch_dict:
-                    await self.write(
+                    await self.write_message(
                         {
                             "request_id": request_id,
                             "result": "error",
@@ -242,7 +237,7 @@ class MockDream(tcpip.OneClientServer):
                 else:
                     func = self.dispatch_dict[action]
                     result_json = await func(items["data"] if "data" in items else None)
-                    await self.write(
+                    await self.write_message(
                         {
                             "request_id": request_id,
                             "result": "ok",
@@ -251,7 +246,7 @@ class MockDream(tcpip.OneClientServer):
                     )
 
             except KeyError as e:
-                await self.write(
+                await self.write_message(
                     {
                         "result": "error",
                         "reason": f"Invalid request: a mandatory key is missing: {e.args[0]}",

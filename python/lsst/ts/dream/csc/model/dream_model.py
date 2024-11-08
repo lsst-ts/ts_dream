@@ -85,7 +85,7 @@ class DreamModel:
 
         async with self.cmd_lock:
             data = await asyncio.wait_for(
-                self.client.read_json(), timeout=60  # self.config.read_timeout
+                self.client.read_json(), timeout=self.config.read_timeout
             )
         return data
 
@@ -113,6 +113,7 @@ class DreamModel:
             raise RuntimeError("Not connected")
 
         request_id: int = next(self.index_generator)
+        self.log.debug(f"Send: {command} {parameters}")
         await self.client.write_json(
             {"action": command, "request_id": request_id, **parameters}
         )

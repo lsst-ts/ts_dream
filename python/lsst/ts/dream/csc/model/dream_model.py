@@ -64,7 +64,9 @@ class DreamModel:
             The port to connect to.
         """
         async with self.cmd_lock:
-            self.client = tcpip.Client(host=host, port=port, log=self.log)
+            self.client = tcpip.Client(
+                host=host, port=port, log=self.log, terminator=b"\n"
+            )
             await asyncio.wait_for(
                 self.client.start_task, timeout=self.config.connection_timeout
             )
@@ -83,7 +85,7 @@ class DreamModel:
 
         async with self.cmd_lock:
             data = await asyncio.wait_for(
-                self.client.read_json(), timeout=self.config.read_timeout
+                self.client.read_json(), timeout=60  # self.config.read_timeout
             )
         return data
 

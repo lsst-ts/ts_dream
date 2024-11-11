@@ -4,6 +4,12 @@
 Version History
 ###############
 
+v0.4.0
+======
+
+* Modified the mock to better reflect the behavior of the real DREAM.
+* Added use of setWeather to advise DREAM about current weather conditions.
+
 v0.3.0
 ======
 

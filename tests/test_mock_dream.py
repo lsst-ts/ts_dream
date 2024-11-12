@@ -39,6 +39,9 @@ random.seed(42)
 """Standard timeout in seconds."""
 TIMEOUT = 5
 
+"""Line terminator for TCP. DREAM uses LF."""
+TERMINATOR = b"\n"
+
 
 class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -67,7 +70,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
             A dictionary with objects representing the string read.
         """
         read_bytes = await asyncio.wait_for(
-            self.reader.readuntil(tcpip.TERMINATOR), timeout=TIMEOUT
+            self.reader.readuntil(TERMINATOR), timeout=TIMEOUT
         )
         data = json.loads(read_bytes.decode())
         return data
@@ -81,7 +84,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
             The data to write.
         """
         st = json.dumps({**data})
-        self.writer.write(st.encode() + tcpip.TERMINATOR)
+        self.writer.write(st.encode() + TERMINATOR)
         await self.writer.drain()
 
     async def test_disconnect(self):

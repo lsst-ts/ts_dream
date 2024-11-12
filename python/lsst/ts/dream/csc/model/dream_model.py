@@ -22,14 +22,11 @@
 __all__ = ["DreamModel"]
 
 import asyncio
-import json
 import logging
-from typing import Any, Dict, List, Optional, Union
+from types import SimpleNamespace
+from typing import Any
 
 from lsst.ts import tcpip, utils
-
-"""Standard timeout in seconds for socket connections."""
-SOCKET_TIMEOUT = 5
 
 
 class DreamModel:
@@ -40,34 +37,21 @@ class DreamModel:
     log : `logging.Logger`, optional
         Logger or None. If None a logger is constructed, else a child to the
         provided logger is constructed.
-
-    Attributes
-    ----------
-    reader: `asyncio.StreamReader`
-        The stream reader to read from the TCP/IP socket.
-    writer: `asyncio.StreamWriter`
-        The stream writer to write to the TCP/IP socket.
-    read_loop: `asyncio.Future`
-        The loop that continuously reads from the TCP/IP socket.
-    sent_commands: `List[int]`
-        A list of command IDs that have been sent but not have been replied to
-        yet.
-    received_cmd_ids: `List[int]`
-        A list of command IDs for which a reply has been received. This is used
-        in unit tests.
     """
 
-    def __init__(self, log: logging.Logger | None = None) -> None:
+    def __init__(
+        self, config: SimpleNamespace, log: logging.Logger | None = None
+    ) -> None:
         if log is None:
             self.log = logging.getLogger(type(self).__name__)
         else:
             self.log = log.getChild(type(self).__name__)
-        self.reader: Optional[asyncio.StreamReader] = None
-        self.writer: Optional[asyncio.StreamWriter] = None
-        self.read_loop: Optional[asyncio.Future] = None
-        self.sent_commands: List[int] = []
-        self.received_cmd_ids: List[int] = []
+
+        self.client = tcpip.Client(host="", port=0, log=self.log)
+
         self.index_generator = utils.index_generator()
+        self.cmd_lock = asyncio.Lock()
+        self.config = config
 
     async def connect(self, host: str, port: int) -> None:
         """Connect to the server.
@@ -79,118 +63,93 @@ class DreamModel:
         port: `int
             The port to connect to.
         """
-        rw_coro = asyncio.open_connection(host=host, port=port)
-        self.reader, self.writer = await asyncio.wait_for(
-            rw_coro, timeout=SOCKET_TIMEOUT
-        )
-        # Start a loop to read incoming data from the SocketServer.
-        self.read_loop = asyncio.create_task(self._read_loop())
+        async with self.cmd_lock:
+            self.client = tcpip.Client(
+                host=host, port=port, log=self.log, terminator=b"\n"
+            )
+            await asyncio.wait_for(
+                self.client.start_task, timeout=self.config.connection_timeout
+            )
+        self.log.debug("Connected to DREAM")
 
     async def read(self) -> dict:
-        """Utility function to read a string from the reader and unmarshal it
+        """Utility function to read a JSON object from the client
 
         Returns
         -------
         data: `dict`
             A dictionary with objects representing the string read.
         """
-        if not self.reader or not self.connected:
+        if not self.connected:
             raise RuntimeError("Not connected")
 
-        read_bytes = await asyncio.wait_for(
-            self.reader.readuntil(tcpip.TERMINATOR), timeout=SOCKET_TIMEOUT
-        )
-        data = json.loads(read_bytes.decode())
+        async with self.cmd_lock:
+            data = await asyncio.wait_for(
+                self.client.read_json(), timeout=self.config.read_timeout
+            )
         return data
 
-    async def write(self, command: str, **data: Any) -> None:
+    async def write(self, command: str, **parameters: Any) -> dict:
         """Write the command and data appended with a newline character.
 
         Parameters
         ----------
         command: `str`
             The command to write.
-        data: `dict`
+        parameters: `dict`
             The data to write.
+
+        Returns
+        -------
+        dict
+            The response data from DREAM.
 
         Raises
         ------
         RuntimeError
             In case there is no socket connection to a server.
         """
-        if not self.writer or not self.connected:
+        if not self.connected:
             raise RuntimeError("Not connected")
 
         request_id: int = next(self.index_generator)
-        st = json.dumps(
-            {
-                "action": command,
-                "request_id": request_id,
-                **data,
-            }
+        self.log.debug(f"Send: {command} {parameters}")
+        await self.client.write_json(
+            {"action": command, "request_id": request_id, **parameters}
         )
-        self.writer.write(st.encode() + tcpip.TERMINATOR)
-        await self.writer.drain()
-        self.sent_commands.append(request_id)
 
-    async def _read_loop(self) -> None:
-        """Execute a loop that reads incoming data from the SocketServer."""
-        try:
-            while True:
-                data = await self.read()
-                self.log.info(f"Received data {data!r}")
-                if "request_id" in data:
-                    if data["request_id"] not in self.sent_commands:
-                        self.log.error(
-                            f"Received a reply to an unknown cmd ID {data['request_id']}."
-                        )
-                    else:
-                        # TODO Properly handle command execution tracing.
-                        self.received_cmd_ids.append(data["request_id"])
-                        self.sent_commands.remove(data["request_id"])
-                else:
-                    # TODO implement handling of messages from DREAM
-                    pass
-        except tcpip.IncompleteReadError:
-            self.log.info("Connection closed by server")
-        except Exception:
-            self.log.exception("_read_loop failed")
-            raise
+        response = await self.read()
+        if "request_id" not in response:
+            self.log.error("No request_id in response from DREAM")
+            raise RuntimeError("No request_id in response from DREAM")
+        if response["request_id"] != request_id:
+            self.log.error(f"Received unexpected request_id: {response['request_id']}")
+            raise RuntimeError(
+                f"Received unexpected request_id: {response['request_id']}"
+            )
+        if "result" not in response:
+            self.log.error("Required key 'result' not found in response from DREAM")
+            raise RuntimeError("Required key 'result' not found in response from DREAM")
+        if response["result"] != "ok":
+            self.log.error(f"Error response from DREAM. Full response: {response}")
+            raise RuntimeError(f"Error response from DREAM. Full response: {response}")
+
+        return response
 
     async def disconnect(self) -> None:
         """Disconnect, if connected."""
         self.log.info("Disconnecting")
+        await self.client.close()
 
     @property
     def connected(self) -> bool:
-        return not (
-            self.reader is None
-            or self.writer is None
-            or self.reader.at_eof()
-            or self.writer.is_closing()
-        )
-
-    async def resume(self) -> None:
-        await self.write(command="resume")
+        return self.client.connected
 
     async def open_roof(self) -> None:
-        await self.write(command="openRoof")
+        await self.write(command="setRoof", data=True)
 
     async def close_roof(self) -> None:
-        await self.write(command="closeRoof")
+        await self.write(command="setRoof", data=False)
 
-    async def stop(self) -> None:
-        await self.write(command="stop")
-
-    async def ready_for_data(self, ready: bool) -> None:
-        await self.write(command="readyForData", parameters={"ready": ready})
-
-    async def data_archived(self) -> None:
-        await self.write(command="dataArchived")
-
-    async def set_weather_info(
-        self, weather_info: Dict[str, Union[bool, float]]
-    ) -> None:
-        await self.write(
-            command="setWeatherInfo", parameters={"weather_info": weather_info}
-        )
+    async def set_weather_ok(self, weather_ok: bool) -> None:
+        await self.write(command="setWeather", data=weather_ok)

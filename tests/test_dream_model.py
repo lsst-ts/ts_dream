@@ -21,9 +21,9 @@
 
 #  type: ignore
 
-import asyncio
 import logging
 import unittest
+from types import SimpleNamespace
 
 from lsst.ts import tcpip
 from lsst.ts.dream.csc.mock import MockDream
@@ -45,7 +45,11 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.srv.start_task
         self.assertTrue(self.srv._server.is_serving())
 
-        self.model = DreamModel(log=self.log)
+        config = SimpleNamespace()
+        config.connection_timeout = 1
+        config.read_timeout = 1
+
+        self.model = DreamModel(config=config, log=self.log)
         await self.model.connect(host=tcpip.LOCAL_HOST, port=self.srv.port)
 
     async def asyncTearDown(self):
@@ -53,45 +57,15 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
         await self.srv.exit()
 
     async def validate_dream_model_func(self, func, **kwargs):
-        self.assertTrue(len(self.model.sent_commands) == 0)
-        self.assertTrue(len(self.model.received_cmd_ids) == 0)
         await func(**kwargs)
-        self.assertTrue(len(self.model.sent_commands) == 1)
-        self.assertTrue(len(self.model.received_cmd_ids) == 0)
-        cmd_id = self.model.sent_commands[0]
-        while len(self.model.sent_commands) > 0:
-            await asyncio.sleep(0.1)
-        self.assertTrue(len(self.model.sent_commands) == 0)
-        self.assertTrue(len(self.model.received_cmd_ids) == 1)
-        self.assertEqual(self.model.received_cmd_ids[0], cmd_id)
 
     async def test_functions_without_param(self):
         for func in [
-            self.model.resume,
             self.model.open_roof,
             self.model.close_roof,
-            self.model.stop,
-            self.model.data_archived,
         ]:
             await self.validate_dream_model_func(func=func)
-            self.model.received_cmd_ids = []
 
-    async def test_ready_for_data(self):
-        await self.validate_dream_model_func(func=self.model.ready_for_data, ready=True)
-
-    async def test_set_weather_info(self):
-        await self.validate_dream_model_func(
-            func=self.model.set_weather_info,
-            weather_info={
-                "weather_info": {
-                    "temperature": 5.7,
-                    "humidity": 15,
-                    "wind_speed": 12,
-                    "wind_direction": 334,
-                    "pressure": 101320,
-                    "rain": 0,
-                    "cloudcover": 0,
-                    "safe_observing_conditions": True,
-                }
-            },
-        )
+    async def test_set_weather_ok(self):
+        await self.model.set_weather_ok(True)
+        await self.model.set_weather_ok(False)

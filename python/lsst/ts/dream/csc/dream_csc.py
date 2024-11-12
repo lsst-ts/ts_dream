@@ -252,7 +252,9 @@ class DreamCsc(salobj.ConfigurableCsc):
                         weather_ok_flag = False
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
-                    self.ess_remote = None
+                    if self.ess_remote is not None:
+                        await self.ess_remote.close()
+                        self.ess_remote = None
                     continue
 
             else:

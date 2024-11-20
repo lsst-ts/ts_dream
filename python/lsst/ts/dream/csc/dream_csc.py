@@ -245,7 +245,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     if air_flow is None or air_flow.speed > 25:
                         weather_ok_flag = False
 
-                    precipitation = await self.ess_remote.evt_precipitation.get()
+                    precipitation = self.ess_remote.evt_precipitation.get()
                     if precipitation is None or (
                         precipitation.raining or precipitation.snowing
                     ):
@@ -255,6 +255,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     if self.ess_remote is not None:
                         await self.ess_remote.close()
                         self.ess_remote = None
+                    await asyncio.sleep(180)  # A little extra safety
                     continue
 
             else:

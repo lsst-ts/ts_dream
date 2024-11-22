@@ -24,7 +24,6 @@ __all__ = ["DreamCsc", "run_dream"]
 import asyncio
 import enum
 import logging
-import time
 from types import SimpleNamespace
 
 from lsst.ts import salobj, utils
@@ -76,7 +75,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.ess_remote: salobj.Remote | None = None
         self.weather_loop_task = utils.make_done_future()
         self.weather_sleep_task = utils.make_done_future()
-        self.last_weather_update: float = 0.0
         self.weather_ok_flag: bool | None = None
 
         super().__init__(
@@ -231,7 +229,6 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.debug(f"Connected to ESS:{self.config.ess_index}.")
 
                     self.weather_ok_flag = None
-                    self.last_weather_update = 0.0
                     if self.ess_remote is None:
                         self.log.error("Failed to connect to weather CSC.")
                         continue
@@ -240,12 +237,16 @@ class DreamCsc(salobj.ConfigurableCsc):
                     # Get weather data.
                     weather_ok_flag = True
                     air_flow = await self.ess_remote.tel_airFlow.next(
-                        flush=False, timeout=2
+                        flush=True,
+                        timeout=2,
                     )
                     if air_flow is None or air_flow.speed > 25:
                         weather_ok_flag = False
 
-                    precipitation = self.ess_remote.evt_precipitation.get()
+                    precipitation = await self.ess_remote.evt_precipitation.next(
+                        flush=True,
+                        timeout=2,
+                    )
                     if precipitation is None or (
                         precipitation.raining or precipitation.snowing
                     ):
@@ -263,16 +264,11 @@ class DreamCsc(salobj.ConfigurableCsc):
                 weather_ok_flag = True
 
             # Compare weather flag with cached value.
-            time_since_last_update = time.time() - self.last_weather_update
-            if (
-                weather_ok_flag != self.weather_ok_flag
-                or time_since_last_update > 60 * 10
-            ):
+            if weather_ok_flag != self.weather_ok_flag:
                 try:
                     # Send weather flag
                     if self.model is not None:
                         await self.model.set_weather_ok(weather_ok_flag)
-                        self.last_weather_update = time.time()
                         self.weather_ok_flag = weather_ok_flag
                     else:
                         self.log.info(

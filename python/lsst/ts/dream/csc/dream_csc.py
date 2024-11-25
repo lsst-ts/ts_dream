@@ -241,14 +241,14 @@ class DreamCsc(salobj.ConfigurableCsc):
                     weather_ok_flag = True
                     air_flow = await self.ess_remote.tel_airFlow.next(
                         flush=True,
-                        timeout=2,
+                        timeout=10,
                     )
                     if air_flow is None or air_flow.speed > 25:
                         weather_ok_flag = False
 
                     precipitation = await self.ess_remote.evt_precipitation.next(
                         flush=True,
-                        timeout=2,
+                        timeout=10,
                     )
                     if precipitation is None or (
                         precipitation.raining or precipitation.snowing

@@ -233,6 +233,9 @@ class DreamCsc(salobj.ConfigurableCsc):
                         self.log.error("Failed to connect to weather CSC.")
                         continue
 
+                    # Wait for the CSC to establish its connection.
+                    await asyncio.sleep(10.0)
+
                 try:
                     # Get weather data.
                     weather_ok_flag = True
@@ -287,6 +290,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                 await self.weather_sleep_task
             except asyncio.CancelledError:
                 self.log.info("Weather loop ending because of asyncio cancel.")
+                raise
 
 
 def run_dream() -> None:

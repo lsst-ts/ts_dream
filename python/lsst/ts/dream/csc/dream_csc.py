@@ -182,7 +182,11 @@ class DreamCsc(salobj.ConfigurableCsc):
             self.mock = None
 
         self.weather_loop_task.cancel()
-        await self.weather_loop_task
+        try:
+            await self.weather_loop_task
+        except asyncio.CancelledError:
+            # This is expected.
+            pass
 
         if self.ess_remote is not None:
             await self.ess_remote.close()

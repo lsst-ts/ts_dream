@@ -129,6 +129,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             if self.model is None:
                 self.model = DreamModel(config=self.config, log=self.log)
             await self.model.connect(host=host, port=port)
+            await self.model.open_roof()
 
         except Exception as e:
             err_msg = f"Could not open connection to host={host}, port={port}: {e!r}"
@@ -175,6 +176,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.log.info("Disconnecting")
         if self.model is not None:
+            await self.model.close_roof()
             await self.model.disconnect()
         self.model = None
         if self.mock:

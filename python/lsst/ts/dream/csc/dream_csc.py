@@ -259,6 +259,16 @@ class DreamCsc(salobj.ConfigurableCsc):
                         precipitation.raining or precipitation.snowing
                     ):
                         weather_ok_flag = False
+
+                    self.log.debug(
+                        f"""
+                        Weather report:
+                        {air_flow.speed=}
+                        {precipitation.raining=}
+                        {precipitation.snowing=}
+                        {weather_ok_flag=}
+                        """
+                    )
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
                     if self.ess_remote is not None:
@@ -271,23 +281,19 @@ class DreamCsc(salobj.ConfigurableCsc):
                 # In simulation mode, don't try to read the weather station.
                 weather_ok_flag = True
 
-            # Compare weather flag with cached value.
-            if weather_ok_flag != self.weather_ok_flag:
-                try:
-                    # Send weather flag
-                    if self.model is not None:
-                        await self.model.set_weather_ok(weather_ok_flag)
-                        self.weather_ok_flag = weather_ok_flag
-                    else:
-                        self.log.info(
-                            "Weather loop ending because of TCP disconnection."
-                        )
-                        return
-                except asyncio.CancelledError:
-                    self.log.info("Weather loop ending because of asycio cancel.")
+            try:
+                # Send weather flag
+                if self.model is not None:
+                    await self.model.set_weather_ok(weather_ok_flag)
+                    self.weather_ok_flag = weather_ok_flag
+                else:
+                    self.log.info("Weather loop ending because of TCP disconnection.")
                     return
-                except Exception:
-                    self.log.exception("Failed to send weather flag!")
+            except asyncio.CancelledError:
+                self.log.info("Weather loop ending because of asycio cancel.")
+                return
+            except Exception:
+                self.log.exception("Failed to send weather flag!")
 
             # Sleep for a bit.
             try:

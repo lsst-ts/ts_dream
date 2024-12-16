@@ -24,7 +24,6 @@ __all__ = ["DreamCsc", "run_dream"]
 import asyncio
 import enum
 import logging
-import time
 from types import SimpleNamespace
 
 from lsst.ts import salobj, utils
@@ -32,6 +31,9 @@ from lsst.ts import salobj, utils
 from . import CONFIG_SCHEMA, __version__
 from .mock import MockDream
 from .model import DreamModel
+
+SAL_TIMEOUT = 10.0
+CSC_RESET_SLEEP_TIME = 180.0
 
 
 class ErrorCode(enum.IntEnum):
@@ -76,7 +78,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.ess_remote: salobj.Remote | None = None
         self.weather_loop_task = utils.make_done_future()
         self.weather_sleep_task = utils.make_done_future()
-        self.last_weather_update: float = 0.0
         self.weather_ok_flag: bool | None = None
 
         super().__init__(
@@ -131,6 +132,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             if self.model is None:
                 self.model = DreamModel(config=self.config, log=self.log)
             await self.model.connect(host=host, port=port)
+            await self.model.open_roof()
 
         except Exception as e:
             err_msg = f"Could not open connection to host={host}, port={port}: {e!r}"
@@ -151,7 +153,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             Command ID and data
         """
         if not self.connected:
-            await self.cmd_enable.ack_in_progress(data=id_data, timeout=10)
+            await self.cmd_enable.ack_in_progress(data=id_data, timeout=SAL_TIMEOUT)
             await self.connect()
         await super().end_enable(id_data)
 
@@ -166,7 +168,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         id_data: `CommandIdData`
             Command ID and data
         """
-        await self.cmd_disable.ack_in_progress(id_data, timeout=10)
+        await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
         await self.disconnect()
         await super().begin_disable(id_data)
 
@@ -177,6 +179,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.log.info("Disconnecting")
         if self.model is not None:
+            await self.model.close_roof()
             await self.model.disconnect()
         self.model = None
         if self.mock:
@@ -184,7 +187,11 @@ class DreamCsc(salobj.ConfigurableCsc):
             self.mock = None
 
         self.weather_loop_task.cancel()
-        await self.weather_loop_task
+        try:
+            await self.weather_loop_task
+        except asyncio.CancelledError:
+            # This is expected.
+            pass
 
         if self.ess_remote is not None:
             await self.ess_remote.close()
@@ -231,58 +238,65 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.debug(f"Connected to ESS:{self.config.ess_index}.")
 
                     self.weather_ok_flag = None
-                    self.last_weather_update = 0.0
                     if self.ess_remote is None:
                         self.log.error("Failed to connect to weather CSC.")
                         continue
+
+                    # Wait for the CSC to establish its connection.
+                    await asyncio.sleep(SAL_TIMEOUT)
 
                 try:
                     # Get weather data.
                     weather_ok_flag = True
                     air_flow = await self.ess_remote.tel_airFlow.next(
-                        flush=False, timeout=2
+                        flush=True,
+                        timeout=SAL_TIMEOUT,
                     )
                     if air_flow is None or air_flow.speed > 25:
                         weather_ok_flag = False
 
-                    precipitation = await self.ess_remote.evt_precipitation.get()
+                    precipitation = await self.ess_remote.evt_precipitation.aget(
+                        timeout=SAL_TIMEOUT
+                    )
                     if precipitation is None or (
                         precipitation.raining or precipitation.snowing
                     ):
                         weather_ok_flag = False
+
+                    self.log.debug(
+                        f"""
+                        Weather report:
+                        {air_flow.speed=}
+                        {precipitation.raining=}
+                        {precipitation.snowing=}
+                        {weather_ok_flag=}
+                        """
+                    )
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
                     if self.ess_remote is not None:
                         await self.ess_remote.close()
                         self.ess_remote = None
+                    await asyncio.sleep(CSC_RESET_SLEEP_TIME)  # A little extra safety
                     continue
 
             else:
                 # In simulation mode, don't try to read the weather station.
                 weather_ok_flag = True
 
-            # Compare weather flag with cached value.
-            time_since_last_update = time.time() - self.last_weather_update
-            if (
-                weather_ok_flag != self.weather_ok_flag
-                or time_since_last_update > 60 * 10
-            ):
-                try:
-                    # Send weather flag
-                    if self.model is not None:
-                        await self.model.set_weather_ok(weather_ok_flag)
-                        self.last_weather_update = time.time()
-                        self.weather_ok_flag = weather_ok_flag
-                    else:
-                        self.log.info(
-                            "Weather loop ending because of TCP disconnection."
-                        )
-                        return
-                except asyncio.CancelledError:
-                    self.log.info("Weather loop ending because of asycio cancel.")
+            try:
+                # Send weather flag
+                if self.model is not None:
+                    await self.model.set_weather_ok(weather_ok_flag)
+                    self.weather_ok_flag = weather_ok_flag
+                else:
+                    self.log.info("Weather loop ending because of TCP disconnection.")
                     return
-                except Exception:
-                    self.log.exception("Failed to send weather flag!")
+            except asyncio.CancelledError:
+                self.log.info("Weather loop ending because of asycio cancel.")
+                return
+            except Exception:
+                self.log.exception("Failed to send weather flag!")
 
             # Sleep for a bit.
             try:
@@ -290,6 +304,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                 await self.weather_sleep_task
             except asyncio.CancelledError:
                 self.log.info("Weather loop ending because of asyncio cancel.")
+                raise
 
 
 def run_dream() -> None:

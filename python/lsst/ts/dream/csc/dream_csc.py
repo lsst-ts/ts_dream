@@ -32,6 +32,9 @@ from . import CONFIG_SCHEMA, __version__
 from .mock import MockDream
 from .model import DreamModel
 
+SAL_TIMEOUT = 10.0
+CSC_RESET_SLEEP_TIME = 180.0
+
 
 class ErrorCode(enum.IntEnum):
     """CSC error codes."""
@@ -150,7 +153,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             Command ID and data
         """
         if not self.connected:
-            await self.cmd_enable.ack_in_progress(data=id_data, timeout=10)
+            await self.cmd_enable.ack_in_progress(data=id_data, timeout=SAL_TIMEOUT)
             await self.connect()
         await super().end_enable(id_data)
 
@@ -165,7 +168,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         id_data: `CommandIdData`
             Command ID and data
         """
-        await self.cmd_disable.ack_in_progress(id_data, timeout=10)
+        await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
         await self.disconnect()
         await super().begin_disable(id_data)
 
@@ -240,20 +243,20 @@ class DreamCsc(salobj.ConfigurableCsc):
                         continue
 
                     # Wait for the CSC to establish its connection.
-                    await asyncio.sleep(10.0)
+                    await asyncio.sleep(SAL_TIMEOUT)
 
                 try:
                     # Get weather data.
                     weather_ok_flag = True
                     air_flow = await self.ess_remote.tel_airFlow.next(
                         flush=True,
-                        timeout=10,
+                        timeout=SAL_TIMEOUT,
                     )
                     if air_flow is None or air_flow.speed > 25:
                         weather_ok_flag = False
 
                     precipitation = await self.ess_remote.evt_precipitation.aget(
-                        timeout=10
+                        timeout=SAL_TIMEOUT
                     )
                     if precipitation is None or (
                         precipitation.raining or precipitation.snowing
@@ -274,7 +277,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     if self.ess_remote is not None:
                         await self.ess_remote.close()
                         self.ess_remote = None
-                    await asyncio.sleep(180)  # A little extra safety
+                    await asyncio.sleep(CSC_RESET_SLEEP_TIME)  # A little extra safety
                     continue
 
             else:

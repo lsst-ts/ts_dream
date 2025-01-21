@@ -179,7 +179,10 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.log.info("Disconnecting")
         if self.model is not None:
-            await self.model.close_roof()
+            try:
+                await self.model.close_roof()
+            except Exception:
+                self.log.exception("While disconnecting, failed to close the roof.")
             await self.model.disconnect()
         self.model = None
         if self.mock:

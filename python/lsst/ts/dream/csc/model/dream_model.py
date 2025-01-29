@@ -153,3 +153,40 @@ class DreamModel:
 
     async def set_weather_ok(self, weather_ok: bool) -> None:
         await self.write(command="setWeather", data=weather_ok)
+
+    async def get_status(self) -> dict[str, Any]:
+        """Queries and returns status information from DREAM.
+
+        This function sends the getStatus command to DREAM. It reads
+        the status information and returns the full set of status data
+        reported by DREAM.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary of status items for DREAM. The format is dictated
+            by the DREAM software, but the keys are strings and currently
+            (as of January 2025) the values are either string, float,
+            boolean, list, or dictionary, with the structure and format
+            getting somewhat complex. Note that only the status body of the
+            response is returned, rather than the entire message with
+            request_id and so forth.
+
+        Raises
+        ------
+        RuntimeError
+            If DREAM responds in an unexpected way.
+        """
+        response = await self.write(command="getStatus")
+        if response["msg_type"] != "status":
+            self.log.error(
+                f"In getStatus, received unexpected message type: {response['msg_type']}"
+            )
+            raise RuntimeError(
+                f"In getStatus, received unexpected message type: {response['msg_type']}"
+            )
+        if "status" not in response:
+            self.log.error("Unexpected format for status message!")
+            raise RuntimeError("Unexpected format for status message!")
+
+        return response["status"]

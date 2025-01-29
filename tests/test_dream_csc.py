@@ -86,3 +86,59 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 cscVersion=dream_csc.__version__,
                 subsystemVersions="",
             )
+
+    async def test_dome_telemetry(self):
+        logging.info("test_dome_telemetry")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            dome_telemetry = await self.remote.tel_dome.next(flush=False)
+            self.assertEqual(dome_telemetry.encoder, 110)
+
+    async def test_environment_telemetry(self):
+        logging.info("test_environment_telemetry")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            environment_telemetry = await self.remote.tel_environment.next(flush=False)
+            self.assertAlmostEqual(
+                environment_telemetry.temperature[0], 25.9606, places=4
+            )
+            self.assertAlmostEqual(
+                environment_telemetry.temperature[1], 25.8428, places=4
+            )
+            self.assertAlmostEqual(
+                environment_telemetry.temperature[2], 25.1485, places=4
+            )
+            self.assertAlmostEqual(environment_telemetry.humidity[0], 50.3808, places=4)
+            self.assertAlmostEqual(environment_telemetry.humidity[1], 50.3114, places=4)
+            self.assertAlmostEqual(environment_telemetry.humidity[2], 50.3550, places=4)
+
+    async def test_power_supply_telemetry(self):
+        logging.info("test_power_supply_telemetry")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            power_supply_telemetry = await self.remote.tel_powerSupply.next(flush=False)
+            self.assertAlmostEqual(power_supply_telemetry.voltage[0], 0.0405, places=4)
+            self.assertAlmostEqual(power_supply_telemetry.voltage[1], 0.0, places=4)
+            self.assertAlmostEqual(
+                power_supply_telemetry.current[0], 0.0008196, places=4
+            )
+            self.assertAlmostEqual(power_supply_telemetry.current[1], 20.0, places=4)
+
+    async def test_ups_telemetry(self):
+        logging.error("test_ups_telemetry")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            ups_telemetry = await self.remote.tel_ups.next(flush=False)
+            self.assertAlmostEqual(ups_telemetry.batteryCharge, 100.0)

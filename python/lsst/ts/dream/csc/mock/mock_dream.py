@@ -291,7 +291,7 @@ class MockDream(tcpip.OneClientServer):
 
         return {
             "msg_type": "status",
-            "status": json.loads(_dream_status),
+            "status": json.loads(_dream_status)["status"],
         }
 
     async def get_new_data_products(self, data: bool | None) -> dict:

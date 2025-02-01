@@ -118,7 +118,9 @@ _dream_status = """
     },
     "dome_position": 110,
     "errors": [
-      "Dome should be closed but it is not"
+      "Dome should be closed but it is not",
+      "Temp hum sensor not reachable",
+      "PDU 2 not reachable"
     ],
     "warnings": [
       "North camera not connected",

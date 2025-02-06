@@ -114,6 +114,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         data = await self.read()
         self.assertEqual(data["request_id"], request_id)
         self.assertEqual(data["result"], "ok")
+        return data
 
     async def verify_error(self, action, **kwargs):
         self.assertTrue(self.srv.connected)
@@ -154,4 +155,5 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         await self.verify_command(action="getNewDataProducts")
 
     async def test_get_status(self):
-        await self.verify_command(action="getStatus")
+        data = await self.verify_command(action="getStatus")
+        self.assertEqual(data["status"]["target_observing_mode"], "IDLE")

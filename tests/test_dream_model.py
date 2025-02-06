@@ -69,3 +69,7 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_set_weather_ok(self):
         await self.model.set_weather_ok(True)
         await self.model.set_weather_ok(False)
+
+    async def test_get_status(self):
+        status = await self.model.get_status()
+        self.assertEqual(status["target_observing_mode"], "IDLE")

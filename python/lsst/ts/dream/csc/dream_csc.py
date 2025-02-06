@@ -76,8 +76,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         # Remote CSC for the weather data.
         self.ess_remote: salobj.Remote | None = None
-        self.weather_loop_task = utils.make_done_future()
-        self.weather_sleep_task = utils.make_done_future()
+        self.weather_and_status_loop_task = utils.make_done_future()
         self.weather_ok_flag: bool | None = None
 
         super().__init__(
@@ -139,7 +138,9 @@ class DreamCsc(salobj.ConfigurableCsc):
             await self.fault(code=ErrorCode.TCPIP_CONNECT_ERROR, report=err_msg)
             return
 
-        self.weather_loop_task = asyncio.ensure_future(self.weather_loop())
+        self.weather_and_status_loop_task = asyncio.ensure_future(
+            self.weather_and_status_loop()
+        )
 
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
@@ -189,9 +190,9 @@ class DreamCsc(salobj.ConfigurableCsc):
             await self.mock.close()
             self.mock = None
 
-        self.weather_loop_task.cancel()
+        self.weather_and_status_loop_task.cancel()
         try:
-            await self.weather_loop_task
+            await self.weather_and_status_loop_task
         except asyncio.CancelledError:
             # This is expected.
             pass
@@ -222,8 +223,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.connected:
             await self.connect()
 
-    async def weather_loop(self) -> None:
-        """Periodically check weather station, and send a flag if needed.
+    async def weather_and_status_loop(self) -> None:
+        """Periodically check DREAM status and weather station and send a flag.
 
         A weather flag is sent when the weather has changed, or every ten
         minutes.
@@ -232,6 +233,8 @@ class DreamCsc(salobj.ConfigurableCsc):
             raise RuntimeError("Not yet configured")
 
         while self.model is not None and self.model.connected:
+            self.log.debug("Checking weather and DREAM status...")
+
             if self.simulation_mode == 0:
                 if self.ess_remote is None:
                     self.ess_remote = salobj.Remote(
@@ -301,10 +304,64 @@ class DreamCsc(salobj.ConfigurableCsc):
             except Exception:
                 self.log.exception("Failed to send weather flag!")
 
+            try:
+                # Get status information and emit telemetry.
+                try:
+                    status_data = await self.model.get_status()
+
+                    environment_key_names = [
+                        "camera_bay",
+                        "electronics_box",
+                        "rack_top",
+                    ]
+
+                    # Dome telemetry...
+                    dome_encoder = status_data["dome_position"]
+                    await self.tel_dome.set_write(encoder=dome_encoder)
+
+                    # Environment telemetry...
+                    environment_temperature = [
+                        status_data["temp_hum"][key_name]["temperature"]
+                        for key_name in environment_key_names
+                    ]
+                    environment_humidity = [
+                        status_data["temp_hum"][key_name]["humidity"]
+                        for key_name in environment_key_names
+                    ]
+                    await self.tel_environment.set_write(
+                        temperature=environment_temperature,
+                        humidity=environment_humidity,
+                    )
+
+                    # Power supply telemetry...
+                    power_supply_voltage = [
+                        status_data["psu_status"]["voltage_feedback"],
+                        status_data["psu_status"]["voltage_setpoint"],
+                    ]
+                    power_supply_current = [
+                        status_data["psu_status"]["current_feedback"],
+                        status_data["psu_status"]["current_setpoint"],
+                    ]
+                    await self.tel_powerSupply.set_write(
+                        voltage=power_supply_voltage,
+                        current=power_supply_current,
+                    )
+
+                    # UPS telemetry...
+                    ups_battery_charge = status_data["ups_status"]["battery_charge"]
+                    await self.tel_ups.set_write(batteryCharge=ups_battery_charge)
+
+                except KeyError:
+                    self.log.exception("Status had unexpected format!")
+            except asyncio.CancelledError:
+                self.log.info("Weather loop ending because of asycio cancel.")
+                return
+            except Exception:
+                self.log.exception("Failed to get DREAM status!")
+
             # Sleep for a bit.
             try:
                 await asyncio.sleep(self.config.poll_interval)
-                await self.weather_sleep_task
             except asyncio.CancelledError:
                 self.log.info("Weather loop ending because of asyncio cancel.")
                 raise

@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     $schema: http://json-schema.org/draft-07/schema#
     $id: https://github.com/lsst-ts/ts_dream/blob/master/python/lsst/ts/dream/csc/config_schema.py
     # title must end with one or more spaces followed by the schema version, which must begin with "v"
-    title: DREAM v2
+    title: DREAM v3
     description: Schema for DREAM configuration files
     type: object
     properties:
@@ -61,6 +61,12 @@ CONFIG_SCHEMA = yaml.safe_load(
         type: number
         minimum: 0
         default: 301
+      battery_low_threshold:
+        description: Percent charge on the UPS battery that is considered "low"
+        type: number
+        minimum: 0
+        exclusiveMaximum: 100
+        default: 25
     required:
       - host
       - port

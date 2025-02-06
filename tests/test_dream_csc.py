@@ -134,7 +134,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.assertAlmostEqual(power_supply_telemetry.current[1], 20.0, places=4)
 
     async def test_ups_telemetry(self):
-        logging.error("test_ups_telemetry")
+        logging.info("test_ups_telemetry")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
             config_dir=None,
@@ -142,3 +142,62 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             ups_telemetry = await self.remote.tel_ups.next(flush=False)
             self.assertAlmostEqual(ups_telemetry.batteryCharge, 100.0)
+
+    async def test_alerts_event(self):
+        logging.info("test_alerts_event")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            alerts_event = await self.remote.evt_alerts.next(flush=False)
+            self.assertFalse(alerts_event.outsideHumidity)
+            self.assertFalse(alerts_event.outsideTemperature)
+
+    async def test_errors_event(self):
+        logging.info("test_errors_event")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            errors_event = await self.remote.evt_errors.next(flush=False)
+
+            # Based on the content of the status message
+            # in the mock object.
+            self.assertFalse(errors_event.domeHumidity)
+            self.assertFalse(errors_event.enclosureTemperature)
+            self.assertFalse(errors_event.enclosureHumidity)
+            self.assertFalse(errors_event.electronicsBoxCommunication)
+            self.assertTrue(errors_event.temperatureSensorCommunication[0])
+            self.assertTrue(errors_event.temperatureSensorCommunication[1])
+            self.assertTrue(errors_event.temperatureSensorCommunication[2])
+            self.assertFalse(errors_event.domePositionUnknown)
+            self.assertFalse(errors_event.daqCommunication)
+            self.assertTrue(errors_event.pduCommunication)
+
+    async def test_temperature_control_event(self):
+        logging.info("test_temperature_control_event")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            temperature_control_event = await self.remote.evt_temperatureControl.next(
+                flush=False
+            )
+            self.assertFalse(temperature_control_event.heatingOn)
+            self.assertFalse(temperature_control_event.coolingOn)
+
+    async def test_ups_event(self):
+        logging.info("test_ups_event")
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=None,
+            simulation_mode=1,
+        ):
+            ups_event = await self.remote.evt_ups.next(flush=False)
+            self.assertTrue(ups_event.online)
+            self.assertFalse(ups_event.batteryLow)
+            self.assertFalse(ups_event.notOnMains)
+            self.assertFalse(ups_event.communicationError)

@@ -8,6 +8,7 @@ v0.5.0
 ======
 
 * Implemented the telemetry items.
+* Added `alerts`, `errors`, `temperatureControl`, and `ups` events.
 
 v0.4.0
 ======

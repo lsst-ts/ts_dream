@@ -25,6 +25,7 @@ import asyncio
 import enum
 import logging
 from types import SimpleNamespace
+from typing import Any, Union
 
 from lsst.ts import salobj, utils
 
@@ -308,48 +309,8 @@ class DreamCsc(salobj.ConfigurableCsc):
                 # Get status information and emit telemetry.
                 try:
                     status_data = await self.model.get_status()
-
-                    environment_key_names = [
-                        "camera_bay",
-                        "electronics_box",
-                        "rack_top",
-                    ]
-
-                    # Dome telemetry...
-                    dome_encoder = status_data["dome_position"]
-                    await self.tel_dome.set_write(encoder=dome_encoder)
-
-                    # Environment telemetry...
-                    environment_temperature = [
-                        status_data["temp_hum"][key_name]["temperature"]
-                        for key_name in environment_key_names
-                    ]
-                    environment_humidity = [
-                        status_data["temp_hum"][key_name]["humidity"]
-                        for key_name in environment_key_names
-                    ]
-                    await self.tel_environment.set_write(
-                        temperature=environment_temperature,
-                        humidity=environment_humidity,
-                    )
-
-                    # Power supply telemetry...
-                    power_supply_voltage = [
-                        status_data["psu_status"]["voltage_feedback"],
-                        status_data["psu_status"]["voltage_setpoint"],
-                    ]
-                    power_supply_current = [
-                        status_data["psu_status"]["current_feedback"],
-                        status_data["psu_status"]["current_setpoint"],
-                    ]
-                    await self.tel_powerSupply.set_write(
-                        voltage=power_supply_voltage,
-                        current=power_supply_current,
-                    )
-
-                    # UPS telemetry...
-                    ups_battery_charge = status_data["ups_status"]["battery_charge"]
-                    await self.tel_ups.set_write(batteryCharge=ups_battery_charge)
+                    await self.send_telemetry(status_data)
+                    await self.send_events(status_data)
 
                 except KeyError:
                     self.log.exception("Status had unexpected format!")
@@ -365,6 +326,158 @@ class DreamCsc(salobj.ConfigurableCsc):
             except asyncio.CancelledError:
                 self.log.info("Weather loop ending because of asyncio cancel.")
                 raise
+
+    async def send_telemetry(self, status_data: dict[str, Any]) -> None:
+        """Sends telemetry from the CSC based on status information.
+
+        Extracts relevant data from the status structure returned
+        from DREAM by the getStatus command and emits SAL telemetry.
+
+        Parameters
+        ----------
+        status_data : dict[str, Any]
+            The status structure returned by DREAM's getStatus
+            command.
+        """
+        if not self.config:
+            raise RuntimeError("Not yet configured")
+
+        try:
+            environment_key_names = [
+                "camera_bay",
+                "electronics_box",
+                "rack_top",
+            ]
+
+            # Dome telemetry...
+            dome_encoder = status_data["dome_position"]
+            await self.tel_dome.set_write(encoder=dome_encoder)
+
+            # Environment telemetry...
+            environment_temperature = [
+                status_data["temp_hum"][key_name]["temperature"]
+                for key_name in environment_key_names
+            ]
+            environment_humidity = [
+                status_data["temp_hum"][key_name]["humidity"]
+                for key_name in environment_key_names
+            ]
+            await self.tel_environment.set_write(
+                temperature=environment_temperature,
+                humidity=environment_humidity,
+            )
+
+            # Power supply telemetry...
+            power_supply_voltage = [
+                status_data["psu_status"]["voltage_feedback"],
+                status_data["psu_status"]["voltage_setpoint"],
+            ]
+            power_supply_current = [
+                status_data["psu_status"]["current_feedback"],
+                status_data["psu_status"]["current_setpoint"],
+            ]
+            await self.tel_powerSupply.set_write(
+                voltage=power_supply_voltage,
+                current=power_supply_current,
+            )
+
+            # UPS telemetry...
+            ups_battery_charge = status_data["ups_status"]["battery_charge"]
+            await self.tel_ups.set_write(batteryCharge=ups_battery_charge)
+        except KeyError:
+            self.log.exception("Status had unexpected format!")
+
+    async def send_events(self, status_data: dict[str, Any]) -> None:
+        """Emits events for the CSC based on status information.
+
+        Extracts relevant data from the status structure returned
+        from DREAM by the getStatus command and emits SAL events.
+
+        Parameters
+        ----------
+        status_data : dict[str, Any]
+            The status structure returned by DREAM's getStatus
+            command.
+
+        """
+        if not self.config:
+            raise RuntimeError("Not yet configured")
+
+        try:
+            # Event `alerts`:
+            # The DREAM team did not specify temperature or humidity limits
+            # for DREAM operation, only wind and precipitation. So these are
+            # always False.
+            await self.evt_alerts.set_write(
+                outsideHumidity=False,
+                outsideTemperature=False,
+            )
+
+            # Event `errors`:
+            pdu1_error = "PDU 1 not reachable"
+            pdu2_error = "PDU 2 not reachable"
+            temphum_error = "Temp hum sensor not reachable"
+            camera_bay_temp_error = "Camera bay temperature too high"
+            camera_bay_hum_error = "Humidity in camera bay too high"
+            electronics_humidity_error = "Humidity in electronics box > limit"
+            dome_humidity_error = "Humidity under dome > limit"
+            dome_humidity_error_2 = "Humidty under dome > limit"
+
+            error_flag_map = {
+                "domeHumidity": [dome_humidity_error, dome_humidity_error_2],
+                "enclosureTemperature": [camera_bay_temp_error],
+                "enclosureHumidity": [camera_bay_hum_error],
+                "electronicsBoxCommunication": [electronics_humidity_error],
+                "temperatureSensorCommunication": [temphum_error],
+                "domePositionUnknown": [],  # There seems to be no way of getting
+                "daqCommunication": [],  # these errors from DREAM.
+                "pduCommunication": [pdu1_error, pdu2_error],
+            }
+
+            error_dict: dict[str, Union[bool, list[bool]]] = {
+                flag: any(
+                    error_string in status_data["errors"]
+                    for error_string in error_string_list
+                )
+                for flag, error_string_list in error_flag_map.items()
+            }
+            # DREAM does not provide separate information about each
+            # temperature sensor, so we'll just duplicate the result
+            # three times to provide the CSC with what it expects.
+            error_dict["temperatureSensorCommunication"] = [
+                bool(error_dict["temperatureSensorCommunication"])
+            ] * 3
+            await self.evt_errors.set_write(**error_dict)
+
+            # Event `temperatureControl`:
+            peltier_relay = status_data["electronics"]["peltier_relay"] == "on"
+            peltier_direction = status_data["electronics"]["peltier_dir"]
+            heating_on = peltier_relay and (peltier_direction == "heating")
+            cooling_on = peltier_relay and (peltier_direction == "cooling")
+            await self.evt_temperatureControl.set_write(
+                heatingOn=heating_on,
+                coolingOn=cooling_on,
+            )
+
+            # Event `ups`:
+            ups_online = status_data["ups_status"]["ups_status"] == "ONLINE"
+            ups_battery_low = (
+                status_data["ups_status"]["battery_charge"]
+                < self.config.battery_low_threshold
+            )
+            ups_not_on_mains = "UPS is on battery" in status_data["warnings"]
+            ups_communication_error = (
+                "UPS not reachable or not responding" in status_data["errors"]
+            )
+            await self.evt_ups.set_write(
+                online=ups_online,
+                batteryLow=ups_battery_low,
+                notOnMains=ups_not_on_mains,
+                communicationError=ups_communication_error,
+            )
+
+        except KeyError:
+            self.log.exception("Status had unexpected format!")
 
 
 def run_dream() -> None:

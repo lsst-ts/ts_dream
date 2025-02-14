@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     $schema: http://json-schema.org/draft-07/schema#
     $id: https://github.com/lsst-ts/ts_dream/blob/master/python/lsst/ts/dream/csc/config_schema.py
     # title must end with one or more spaces followed by the schema version, which must begin with "v"
-    title: DREAM v3
+    title: DREAM v4
     description: Schema for DREAM configuration files
     type: object
     properties:
@@ -67,6 +67,14 @@ CONFIG_SCHEMA = yaml.safe_load(
         minimum: 0
         exclusiveMaximum: 100
         default: 25
+      s3instance:
+        description: >-
+          Large File Annex S3 instance, for example "cp", "tuc" or  "ls".
+        type: string
+        pattern: "^[a-z0-9][.a-z0-9]*[a-z0-9]$"
+      url_root:
+        description: Root URL where DREAM data products are found.
+        type: string
     required:
       - host
       - port
@@ -74,6 +82,8 @@ CONFIG_SCHEMA = yaml.safe_load(
       - read_timeout
       - poll_interval
       - ess_index
+      - s3instance
+      - url_root
     additionalProperties: false
     """
 )

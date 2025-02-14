@@ -19,4 +19,4 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from .dream_model import DreamModel
+from .dream_model import DataProduct, DreamModel

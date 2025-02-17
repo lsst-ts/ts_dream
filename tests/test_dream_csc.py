@@ -22,12 +22,16 @@
 #  type: ignore
 
 import logging
+import pathlib
 import unittest
 
 import lsst.ts.dream.csc as dream_csc
 from lsst.ts import salobj
+from lsst.ts.dream.csc.mock.dream_mock_http import MockDreamHTTPServer
 
 STD_TIMEOUT = 2  # standard command timeout (sec)
+TEST_CONFIG_DIR = pathlib.Path(__file__).parent / "config"
+
 
 logging.basicConfig(
     format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
@@ -36,7 +40,9 @@ logging.basicConfig(
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.srv = dream_csc.mock.MockDream(host="0.0.0.0", port=0)
+        self.srv = dream_csc.mock.MockDream(
+            host="0.0.0.0", port=0, log=logging.getLogger("foobar")
+        )
         await self.srv.start_task
         self.mock_port = self.srv.port
         self.writer = None
@@ -201,3 +207,25 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.assertFalse(ups_event.batteryLow)
             self.assertFalse(ups_event.notOnMains)
             self.assertFalse(ups_event.communicationError)
+
+    async def test_new_products(self):
+        logging.info("test_new_products")
+        http_server = MockDreamHTTPServer(port=53841)
+        await http_server.start()
+
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            for i in range(1, 5):
+                large_file_event = await self.remote.evt_largeFileObjectAvailable.next(
+                    flush=False
+                )
+                url = large_file_event.url
+                key = url[url.index("DREAM/") :]
+                fileobj = await self.csc.s3bucket.download(key=key)
+                file_contents = fileobj.getvalue().decode("utf-8")
+                self.assertEqual(file_contents, f"This is data product {i}")
+
+        await http_server.stop()

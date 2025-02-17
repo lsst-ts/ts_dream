@@ -23,12 +23,13 @@ __all__ = ["DreamCsc", "run_dream"]
 
 import asyncio
 import enum
+import io
 import logging
 import pathlib
 from types import SimpleNamespace
 from typing import Any, Union
 
-import requests  # type: ignore
+import httpx
 from lsst.ts import salobj, utils
 
 from . import CONFIG_SCHEMA, __version__
@@ -80,6 +81,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         # Remote CSC for the weather data.
         self.ess_remote: salobj.Remote | None = None
         self.weather_and_status_loop_task = utils.make_done_future()
+        self.data_product_loop_task = utils.make_done_future()
         self.weather_ok_flag: bool | None = None
 
         super().__init__(
@@ -135,7 +137,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         try:
             if self.simulation_mode == 1:
                 if self.mock_port is None:
-                    self.mock = MockDream(host="127.0.0.1", port=0)
+                    self.mock = MockDream(host="127.0.0.1", port=0, log=self.log)
                     await self.mock.start_task
                     port = self.mock.port
                     self.log.info(f"Mock started on port {port}")
@@ -156,6 +158,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.weather_and_status_loop_task = asyncio.ensure_future(
             self.weather_and_status_loop()
         )
+        self.data_product_loop_task = asyncio.ensure_future(self.data_product_loop())
 
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
@@ -206,8 +209,10 @@ class DreamCsc(salobj.ConfigurableCsc):
             self.mock = None
 
         self.weather_and_status_loop_task.cancel()
+        self.data_product_loop_task.cancel()
         try:
             await self.weather_and_status_loop_task
+            await self.data_product_loop_task
         except asyncio.CancelledError:
             # This is expected.
             pass
@@ -258,7 +263,10 @@ class DreamCsc(salobj.ConfigurableCsc):
                 data_products = await self.model.get_new_data_products()
                 for data_product in data_products:
                     self.log.info(f"New data product: {data_product.filename}")
-                    await self.upload_data_product(data_product)
+                    try:
+                        await self.upload_data_product(data_product)
+                    except Exception:
+                        self.log.exception("Upload data product failed")
 
             await asyncio.sleep(self.config.poll_interval)
 
@@ -539,71 +547,117 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
+        # Set up an LFA bucket key
+        product_type = "" if data_product.type is None else f"_{data_product.type}"
+        other = (
+            f"{data_product.start.tai.isot}_{data_product.server}_"
+            f"{data_product.kind}{product_type}_"
+            f"{data_product.seq[0]:06d}_{data_product.seq[-1]:06d}"
+        )
+        key = self.s3bucket.make_key(
+            salname=self.salinfo.name,
+            salindexname=None,
+            generator="dream",
+            date=data_product.start,
+            other=other,
+            suffix=".fits",
+        )
+
         # Download the object with HTTP
-        dream_url = f"{self.url_root}/{data_product.filename}"
-        with requests.get(dream_url, stream=True) as response:
-            if response.status_code != 200:
-                # Handle a failure in retrieving the file.
-                self.log.error(f"Data lost: failed to retrieve file: {data_product!r}")
-                return
+        dream_url = f"{self.config.url_root}/{data_product.filename}"
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", dream_url) as response:
+                if response.status_code != 200:
+                    self.log.error(
+                        f"Data lost [1]: failed to retrieve file: {dream_url} - HTTP {response.status_code}"
+                    )
+                    return
 
-            # Set up an LFA bucket key
-            product_type = "" if data_product.type is None else f"_{data_product.type}"
-            other = (
-                f"{data_product.start.tai.isot}_{data_product.server}_"
-                f"{data_product.kind}{product_type}_"
-                f"{data_product.seq[0]:06d}_{data_product.seq[-1]:06d}",
-            )
-            key = self.s3bucket.make_key(
-                salname=self.salinfo.name,
-                generator=self.config.generator_name,
-                date=data_product.start,
-                other=other,
-                suffix=".fits",
-            )
-
-            try:
-                # Try to upload and emit an event.
-                await self.s3bucket.upload(fileobj=response.raw, key=key)
-                url = (
-                    f"{self.s3bucket.service_resource.meta.client.meta.endpoint_url}/"
-                    f"{self.s3bucket.name}/{key}"
-                )
-                await self.evt_largeFileObjectAvailable.set_write(
-                    url=url, generator=self.config.generator_name
-                )
-            except Exception:
-                self.log.exception(
-                    f"Could not upload FITS file {key} to S3; trying to save to local disk."
-                )
                 try:
-                    # In case the existing response is partially consumed, get
-                    # a fresh HTTP response.
-                    with requests.get(dream_url, stream=True) as response:
-                        if response.status_code != 200:
-                            self.log.error(
-                                f"Data lost: failed to retrieve file for local save: {data_product!r}"
-                            )
-                            return
-
-                        filepath = pathlib.Path("/tmp") / self.s3bucket.name / key
-                        dirpath = filepath.parent
-                        if not dirpath.exists():
-                            self.log.info(f"Create {str(dirpath)}")
-                            dirpath.mkdir(parents=True, exist_ok=True)
-
-                        with open(filepath, "wb") as tmp_file:
-                            for chunk in response.iter_content(chunk_size=None):
-                                tmp_file.write(chunk)
-
-                        await self.evt_largeFileObjectAvailable.set_write(
-                            url=filepath.as_uri(), generator=self.config.generator_name
-                        )
+                    # First attempt: Save to S3
+                    await self.save_to_s3(response, key)
+                    return  # Success!
                 except Exception:
                     self.log.exception(
-                        "Data lost: could not save the FITS file locally, either."
+                        f"Could not upload {key} to S3; trying to save to local disk."
                     )
-                    raise
+
+            # Second attempt: Fresh request and save locally
+            async with client.stream("GET", dream_url) as response:
+                if response.status_code != 200:
+                    self.log.error(
+                        f"Data lost [2]: failed to retrieve file: {dream_url} - HTTP {response.status_code}"
+                    )
+                    return
+
+                try:
+                    await self.save_to_local_disk(response, key)
+                except Exception:
+                    self.log.exception("Also failed to save file locally. Data lost!")
+
+    async def save_to_s3(self, response: httpx.Response, key: str) -> None:
+        """Upload file to S3 from an HTTP stream.
+
+        Parameters
+        ----------
+        response: httpx.Response
+            HTTP response object for the file to save.
+
+        key: str
+            S3 style filename key to save to.
+        """
+        if not self.s3bucket:
+            raise RuntimeError("S3 bucket not configured")
+
+        try:
+            with io.BytesIO(await response.aread()) as buffer:
+                await self.s3bucket.upload(fileobj=buffer, key=key)
+            url = (
+                f"{self.s3bucket.service_resource.meta.client.meta.endpoint_url}/"
+                f"{self.s3bucket.name}/{key}"
+            )
+            await self.evt_largeFileObjectAvailable.set_write(
+                url=url,
+                generator="dream",
+            )
+            self.log.info(f"Successfully uploaded {key} to S3.")
+        except Exception:
+            self.log.exception(f"Failed to upload {key} to S3.")
+            raise
+
+    async def save_to_local_disk(self, response: httpx.Response, key: str) -> None:
+        """Save the file from an HTTP stream to local disk.
+
+        Parameters
+        ----------
+        response: httpx.Response
+            HTTP response object for the file to save.
+
+        key: str
+            S3 style filename key to save to.
+        """
+        if not self.s3bucket:
+            raise RuntimeError("S3 bucket not configured")
+
+        try:
+            filepath = pathlib.Path("/tmp") / self.s3bucket.name / key
+            dirpath = filepath.parent
+            if not dirpath.exists():
+                self.log.info(f"Creating directory {str(dirpath)}")
+                dirpath.mkdir(parents=True, exist_ok=True)
+
+            with open(filepath, "wb") as tmp_file:
+                async for chunk in response.aiter_bytes():
+                    tmp_file.write(chunk)
+
+            await self.evt_largeFileObjectAvailable.set_write(
+                url=filepath.as_uri(),
+                generator="dream",
+            )
+            self.log.info(f"Saved {key} to local disk at {filepath}")
+        except Exception:
+            self.log.exception("Could not save the file to local disk.")
+            raise
 
 
 def run_dream() -> None:

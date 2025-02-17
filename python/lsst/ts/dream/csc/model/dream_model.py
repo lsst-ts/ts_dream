@@ -114,10 +114,9 @@ class DreamModel:
         if not self.connected:
             raise RuntimeError("Not connected")
 
-        async with self.cmd_lock:
-            data = await asyncio.wait_for(
-                self.client.read_json(), timeout=self.config.read_timeout
-            )
+        data = await asyncio.wait_for(
+            self.client.read_json(), timeout=self.config.read_timeout
+        )
         return data
 
     async def write(self, command: str, **parameters: Any) -> dict:
@@ -143,13 +142,15 @@ class DreamModel:
         if not self.connected:
             raise RuntimeError("Not connected")
 
-        request_id: int = next(self.index_generator)
-        self.log.debug(f"Send: {command} {parameters}")
-        await self.client.write_json(
-            {"action": command, "request_id": request_id, **parameters}
-        )
+        async with self.cmd_lock:
+            request_id: int = next(self.index_generator)
+            self.log.debug(f"Send: {command} {request_id=} {parameters}")
+            await self.client.write_json(
+                {"action": command, "request_id": request_id, **parameters}
+            )
 
-        response = await self.read()
+            response = await self.read()
+
         if "request_id" not in response:
             self.log.error("No request_id in response from DREAM")
             raise RuntimeError("No request_id in response from DREAM")

@@ -157,3 +157,12 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
     async def test_get_status(self):
         data = await self.verify_command(action="getStatus")
         self.assertEqual(data["status"]["target_observing_mode"], "IDLE")
+
+    async def test_get_products(self):
+        data = await self.verify_command(action="getNewDataProducts")
+        new_products = data["new_products"]
+        self.assertEqual(len(new_products), 4)
+        self.assertEqual(
+            new_products[0]["sha256"],
+            "23ff1547b9c233d672a844a319429224973d3d80f875db7e06c6264fb066d9a2",
+        )

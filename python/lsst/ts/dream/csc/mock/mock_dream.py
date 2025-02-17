@@ -142,6 +142,55 @@ _dream_status = """
 }
 """
 
+_dream_new_data_products = """
+[
+  {
+    "kind": "cloud",
+    "type": "flat",
+    "seq": [41, 51, 73],
+    "start": "2025-02-14T21:02:55.206869",
+    "end": "2025-02-14T22:49:02.688417",
+    "server": "N",
+    "size": 22,
+    "filename": "product1.txt",
+    "sha256": "23ff1547b9c233d672a844a319429224973d3d80f875db7e06c6264fb066d9a2"
+  },
+  {
+    "kind": "cloud",
+    "type": "science",
+    "seq": [19, 36, 76, 76, 11, 56],
+    "start": "2025-02-14T21:02:55.207006",
+    "end": "2025-02-14T21:57:34.909060",
+    "server": "W",
+    "size": 22,
+    "filename": "product2.txt",
+    "sha256": "75aa4be4383599411fde6b3743175d0b644d9898e95aa00b3b312e3ad3256deb"
+  },
+  {
+    "kind": "calibration",
+    "type": null,
+    "seq": [57, 6, 39, 47],
+    "start": "2025-02-14T21:02:55.207107",
+    "end": "2025-02-14T22:13:39.266971",
+    "server": "S",
+    "size": 22,
+    "filename": "product3.txt",
+    "sha256": "b0ecff2cf65ceda880023b5ccec025500afd313d9fdd5fc526ea37cc58c1823b"
+  },
+  {
+    "kind": "image",
+    "type": "bias",
+    "seq": [17, 84, 12, 100, 10, 80],
+    "start": "2025-02-14T21:02:55.207178",
+    "end": "2025-02-14T21:59:03.871391",
+    "server": "B",
+    "size": 22,
+    "filename": "product4.txt",
+    "sha256": "26d360bc18c837220f338b03b66b8e1b6d751df475e9a453b87136a0bda4496b"
+  }
+]
+"""
+
 
 class MockDream(tcpip.OneClientServer):
     """A mock DREAM server for exchanging messages that talks over TCP/IP.
@@ -165,10 +214,13 @@ class MockDream(tcpip.OneClientServer):
         host: typing.Optional[str],
         port: int,
         family: socket.AddressFamily = socket.AF_UNSPEC,
+        log: logging.Logger | None = None,
     ) -> None:
         self.name = "MockDream"
         self.read_loop_task: asyncio.Future = asyncio.Future()
-        self.log: logging.Logger = logging.getLogger(type(self).__name__)
+        self.log: logging.Logger = (
+            logging.getLogger(type(self).__name__) if log is None else log
+        )
 
         # Dict of command: function to look up which funtion to call when a
         # command arrives.
@@ -225,7 +277,6 @@ class MockDream(tcpip.OneClientServer):
             self.log.debug("Waiting for next incoming message.")
             try:
                 items = await self.read_json()
-                self.log.debug(f"Read from tcp: {items}")
                 action = items["action"]
                 request_id = items["request_id"]
                 if action not in self.dispatch_dict:
@@ -258,6 +309,15 @@ class MockDream(tcpip.OneClientServer):
             except asyncio.exceptions.IncompleteReadError:
                 self.log.info(
                     "Read error encountered, probably because the connection was closed."
+                )
+
+            except Exception as ex:
+                self.log.exception("Exception raised while preparing response.")
+                await self.write_message(
+                    {
+                        "result": "error",
+                        "reason": f"Exception: {ex!r}",
+                    }
                 )
 
     async def disconnect(self) -> None:
@@ -324,7 +384,7 @@ class MockDream(tcpip.OneClientServer):
         self.log.info("get_new_data_products called.")
         return {
             "msg_type": "list",
-            "new_products": [],
+            "new_products": json.loads(_dream_new_data_products),
         }
 
     async def set_weather(self, data: bool | None) -> dict:

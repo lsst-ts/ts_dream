@@ -40,6 +40,9 @@ logging.basicConfig(
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
+        self.http_server = MockDreamHTTPServer(port=53841)
+        await self.http_server.start()
+
         self.srv = dream_csc.mock.MockDream(
             host="0.0.0.0", port=0, log=logging.getLogger("foobar")
         )
@@ -53,6 +56,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.writer.close()
             await self.writer.wait_closed()
         await self.srv.exit()
+        await self.http_server.stop()
 
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
         return dream_csc.DreamCsc(
@@ -63,8 +67,11 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_standard_state_transitions(self):
+
         async with self.make_csc(
-            initial_state=salobj.State.STANDBY, config_dir=None, simulation_mode=1
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
         ):
             await self.check_standard_state_transitions(
                 enabled_commands=(),
@@ -80,11 +87,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 ),
             )
 
+        await self.http_server.stop()
+
     async def test_version(self):
         logging.info("test_version")
         async with self.make_csc(
             initial_state=salobj.State.STANDBY,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             await self.assert_next_sample(
@@ -97,7 +106,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_dome_telemetry")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             dome_telemetry = await self.remote.tel_dome.next(flush=False)
@@ -107,7 +116,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_environment_telemetry")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             environment_telemetry = await self.remote.tel_environment.next(flush=False)
@@ -128,7 +137,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_power_supply_telemetry")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             power_supply_telemetry = await self.remote.tel_powerSupply.next(flush=False)
@@ -143,7 +152,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_ups_telemetry")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             ups_telemetry = await self.remote.tel_ups.next(flush=False)
@@ -153,7 +162,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_alerts_event")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             alerts_event = await self.remote.evt_alerts.next(flush=False)
@@ -164,7 +173,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_errors_event")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             errors_event = await self.remote.evt_errors.next(flush=False)
@@ -186,7 +195,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_temperature_control_event")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             temperature_control_event = await self.remote.evt_temperatureControl.next(
@@ -199,7 +208,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         logging.info("test_ups_event")
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
-            config_dir=None,
+            config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
             ups_event = await self.remote.evt_ups.next(flush=False)
@@ -210,9 +219,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
     async def test_new_products(self):
         logging.info("test_new_products")
-        http_server = MockDreamHTTPServer(port=53841)
-        await http_server.start()
-
         async with self.make_csc(
             initial_state=salobj.State.ENABLED,
             config_dir=TEST_CONFIG_DIR,
@@ -228,4 +234,36 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 file_contents = fileobj.getvalue().decode("utf-8")
                 self.assertEqual(file_contents, f"This is data product {i}")
 
-        await http_server.stop()
+    async def test_data_upload_failure(self):
+        """Test that the CSC enters FAULT state if the data upload fails."""
+        logging.info("test_data_upload_failure")
+
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            with unittest.mock.patch.object(
+                self.csc.s3bucket,
+                "upload",
+                side_effect=Exception("Simulated upload failure"),
+            ), unittest.mock.patch(
+                "builtins.open", unittest.mock.mock_open()
+            ) as mock_file:
+                mock_file.side_effect = IOError("Disk full")
+                await self.assert_next_summary_state(salobj.State.ENABLED)
+                await self.assert_next_summary_state(salobj.State.FAULT)
+
+    async def test_data_download_failure(self):
+        """Test that the CSC enters FAULT state if the data upload fails."""
+        logging.info("test_data_upload_failure")
+
+        await self.http_server.stop()
+
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            await self.assert_next_summary_state(salobj.State.ENABLED)
+            await self.assert_next_summary_state(salobj.State.FAULT)

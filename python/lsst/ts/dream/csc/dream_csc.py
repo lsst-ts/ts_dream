@@ -44,6 +44,7 @@ class ErrorCode(enum.IntEnum):
     """CSC error codes."""
 
     TCPIP_CONNECT_ERROR = 1
+    UPLOAD_DATA_PRODUCT_FAILED = 2
 
 
 class DreamCsc(salobj.ConfigurableCsc):
@@ -51,13 +52,13 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     Parameters
     ----------
-    config_dir: `string`
+    config_dir : `string`
         The configuration directory
-    initial_state: `salobj.State`
+    initial_state : `salobj.State`
         The initial state of the CSC
-    simulation_mode: `int`
+    simulation_mode : `int`
         Simulation mode (1) or not (0)
-    mock_port: `int`, optional
+    mock_port : `int`, optional
         The port that the mock DREAM will listen on. Ignored when
         simulation_mode == 0.
     """
@@ -155,10 +156,10 @@ class DreamCsc(salobj.ConfigurableCsc):
             await self.fault(code=ErrorCode.TCPIP_CONNECT_ERROR, report=err_msg)
             return
 
-        self.weather_and_status_loop_task = asyncio.ensure_future(
+        self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
         )
-        self.data_product_loop_task = asyncio.ensure_future(self.data_product_loop())
+        self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
 
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
@@ -168,7 +169,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        id_data: `CommandIdData`
+        id_data : `CommandIdData`
             Command ID and data
         """
         if not self.connected:
@@ -184,7 +185,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        id_data: `CommandIdData`
+        id_data : `CommandIdData`
             Command ID and data
         """
         await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
@@ -210,12 +211,11 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.weather_and_status_loop_task.cancel()
         self.data_product_loop_task.cancel()
-        try:
-            await self.weather_and_status_loop_task
-            await self.data_product_loop_task
-        except asyncio.CancelledError:
-            # This is expected.
-            pass
+        await asyncio.gather(
+            self.weather_and_status_loop_task,
+            self.data_product_loop_task,
+            return_exceptions=True,
+        )
 
         if self.ess_remote is not None:
             await self.ess_remote.close()
@@ -265,8 +265,13 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.info(f"New data product: {data_product.filename}")
                     try:
                         await self.upload_data_product(data_product)
-                    except Exception:
+                    except Exception as e:
                         self.log.exception("Upload data product failed")
+                        err_msg = f"Failed to upload DREAM data product: {e!r}"
+                        await self.fault(
+                            code=ErrorCode.UPLOAD_DATA_PRODUCT_FAILED, report=err_msg
+                        )
+                        return
 
             await asyncio.sleep(self.config.poll_interval)
 
@@ -381,7 +386,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        status_data : dict[str, Any]
+        status_data : `dict[str, Any]`
             The status structure returned by DREAM's getStatus
             command.
         """
@@ -441,7 +446,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        status_data : dict[str, Any]
+        status_data : `dict[str, Any]`
             The status structure returned by DREAM's getStatus
             command.
 
@@ -536,7 +541,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         Parameters
         ----------
-        data_product: DataProduct
+        data_product: `DataProduct`
             Information about the new file that is available. This
             structure is sent by DREAM in response to the
             getNewDataProducts command.
@@ -567,11 +572,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         dream_url = f"{self.config.url_root}/{data_product.filename}"
         async with httpx.AsyncClient() as client:
             async with client.stream("GET", dream_url) as response:
-                if response.status_code != 200:
-                    self.log.error(
-                        f"Data lost [1]: failed to retrieve file: {dream_url} - HTTP {response.status_code}"
-                    )
-                    return
+                response.raise_for_status()
 
                 try:
                     # First attempt: Save to S3
@@ -581,83 +582,63 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.exception(
                         f"Could not upload {key} to S3; trying to save to local disk."
                     )
-
-            # Second attempt: Fresh request and save locally
-            async with client.stream("GET", dream_url) as response:
-                if response.status_code != 200:
-                    self.log.error(
-                        f"Data lost [2]: failed to retrieve file: {dream_url} - HTTP {response.status_code}"
-                    )
-                    return
-
-                try:
                     await self.save_to_local_disk(response, key)
-                except Exception:
-                    self.log.exception("Also failed to save file locally. Data lost!")
 
     async def save_to_s3(self, response: httpx.Response, key: str) -> None:
         """Upload file to S3 from an HTTP stream.
 
         Parameters
         ----------
-        response: httpx.Response
+        response : `httpx.Response`
             HTTP response object for the file to save.
 
-        key: str
+        key : `str`
             S3 style filename key to save to.
         """
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
-        try:
-            with io.BytesIO(await response.aread()) as buffer:
-                await self.s3bucket.upload(fileobj=buffer, key=key)
-            url = (
-                f"{self.s3bucket.service_resource.meta.client.meta.endpoint_url}/"
-                f"{self.s3bucket.name}/{key}"
-            )
-            await self.evt_largeFileObjectAvailable.set_write(
-                url=url,
-                generator="dream",
-            )
-            self.log.info(f"Successfully uploaded {key} to S3.")
-        except Exception:
-            self.log.exception(f"Failed to upload {key} to S3.")
-            raise
+        with io.BytesIO(await response.aread()) as buffer:
+            await self.s3bucket.upload(fileobj=buffer, key=key)
+        url = (
+            f"{self.s3bucket.service_resource.meta.client.meta.endpoint_url}/"
+            f"{self.s3bucket.name}/{key}"
+        )
+        await self.evt_largeFileObjectAvailable.set_write(
+            url=url,
+            generator="dream",
+        )
+        self.log.info(f"Successfully uploaded {key} to S3.")
 
     async def save_to_local_disk(self, response: httpx.Response, key: str) -> None:
         """Save the file from an HTTP stream to local disk.
 
         Parameters
         ----------
-        response: httpx.Response
+        response : `httpx.Response`
             HTTP response object for the file to save.
 
-        key: str
+        key: `str`
             S3 style filename key to save to.
         """
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
-        try:
-            filepath = pathlib.Path("/tmp") / self.s3bucket.name / key
-            dirpath = filepath.parent
-            if not dirpath.exists():
-                self.log.info(f"Creating directory {str(dirpath)}")
-                dirpath.mkdir(parents=True, exist_ok=True)
+        filepath = pathlib.Path("/tmp") / self.s3bucket.name / key
+        dirpath = filepath.parent
+        if not dirpath.exists():
+            self.log.info(f"Creating directory {str(dirpath)}")
+            dirpath.mkdir(parents=True, exist_ok=True)
 
-            with open(filepath, "wb") as tmp_file:
-                async for chunk in response.aiter_bytes():
-                    tmp_file.write(chunk)
+        with open(filepath, "wb") as tmp_file:
+            async for chunk in response.aiter_bytes():
+                tmp_file.write(chunk)
 
-            await self.evt_largeFileObjectAvailable.set_write(
-                url=filepath.as_uri(),
-                generator="dream",
-            )
-            self.log.info(f"Saved {key} to local disk at {filepath}")
-        except Exception:
-            self.log.exception("Could not save the file to local disk.")
-            raise
+        await self.evt_largeFileObjectAvailable.set_write(
+            url=filepath.as_uri(),
+            generator="dream",
+        )
+        self.log.info(f"Saved {key} to local disk at {filepath}")
 
 
 def run_dream() -> None:

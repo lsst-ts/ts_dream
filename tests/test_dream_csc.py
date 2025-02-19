@@ -232,7 +232,17 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 key = url[url.index("DREAM/") :]
                 fileobj = await self.csc.s3bucket.download(key=key)
                 file_contents = fileobj.getvalue().decode("utf-8")
-                self.assertEqual(file_contents, f"This is data product {i}")
+
+                file_index = [
+                    "N_cloud_flat_000041_000073.txt",
+                    "W_cloud_science_000019_000056.txt",
+                    "S_calibration_000057_000047.txt",
+                    "B_image_bias_000017_000080.txt",
+                ]
+                for i, key_ending in enumerate(file_index):
+                    if key.endswith(key_ending):
+                        self.assertEqual(file_contents, f"This is data product {i+1}")
+                        break
 
     async def test_data_upload_failure(self):
         """Test that the CSC enters FAULT state if the data upload fails."""

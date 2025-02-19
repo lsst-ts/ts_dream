@@ -239,9 +239,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     "S_calibration_000057_000047.txt",
                     "B_image_bias_000017_000080.txt",
                 ]
-                for i, key_ending in enumerate(file_index):
+                for j, key_ending in enumerate(file_index):
                     if key.endswith(key_ending):
-                        self.assertEqual(file_contents, f"This is data product {i+1}")
+                        self.assertEqual(file_contents, f"This is data product {j+1}")
                         break
 
     async def test_data_upload_failure(self):

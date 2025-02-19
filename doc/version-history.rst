@@ -4,6 +4,11 @@
 Version History
 ###############
 
+v0.5.1
+======
+
+* Implemented the getNewDataProducts command.
+
 v0.5.0
 ======
 

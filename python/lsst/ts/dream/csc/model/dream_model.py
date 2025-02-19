@@ -19,14 +19,45 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ["DreamModel"]
+__all__ = ["DataProduct", "DreamModel"]
 
 import asyncio
 import logging
+from dataclasses import asdict, dataclass
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal, Type, TypeVar
 
+from astropy.time import Time
 from lsst.ts import tcpip, utils
+
+T = TypeVar("T", bound="DataProduct")
+
+
+@dataclass
+class DataProduct:
+    kind: Literal["cloud", "image", "calibration", "lightcurve"]
+    type: Literal["dark", "flat", "bias", "science"] | None
+    seq: list[int]
+    start: Time
+    end: Time
+    server: Literal["N", "E", "S", "W", "C", "B"]
+    size: int  # in bytes
+    filename: str
+    sha256: str
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert dataclass to dictionary with time in ISO format."""
+        data = asdict(self)
+        data["start"] = self.start.iso
+        data["end"] = self.end.iso
+        return data
+
+    @classmethod
+    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
+        """Build a dataclass object from dictionary with time in ISO format."""
+        data["start"] = Time(data["start"])
+        data["end"] = Time(data["end"])
+        return cls(**data)
 
 
 class DreamModel:
@@ -83,10 +114,9 @@ class DreamModel:
         if not self.connected:
             raise RuntimeError("Not connected")
 
-        async with self.cmd_lock:
-            data = await asyncio.wait_for(
-                self.client.read_json(), timeout=self.config.read_timeout
-            )
+        data = await asyncio.wait_for(
+            self.client.read_json(), timeout=self.config.read_timeout
+        )
         return data
 
     async def write(self, command: str, **parameters: Any) -> dict:
@@ -112,13 +142,15 @@ class DreamModel:
         if not self.connected:
             raise RuntimeError("Not connected")
 
-        request_id: int = next(self.index_generator)
-        self.log.debug(f"Send: {command} {parameters}")
-        await self.client.write_json(
-            {"action": command, "request_id": request_id, **parameters}
-        )
+        async with self.cmd_lock:
+            request_id: int = next(self.index_generator)
+            self.log.debug(f"Send: {command} {request_id=} {parameters}")
+            await self.client.write_json(
+                {"action": command, "request_id": request_id, **parameters}
+            )
 
-        response = await self.read()
+            response = await self.read()
+
         if "request_id" not in response:
             self.log.error("No request_id in response from DREAM")
             raise RuntimeError("No request_id in response from DREAM")
@@ -190,3 +222,34 @@ class DreamModel:
             raise RuntimeError("Unexpected format for status message!")
 
         return response["status"]
+
+    async def get_new_data_products(self) -> list[DataProduct]:
+        """Queries whether new data products are available from DREAM.
+
+        New data products are made available from DREAM via HTTP. A
+        query with this command provides the URL and other metadata
+        associated with these data products. The DREAM CSC should
+        collect these products and load them to the LFA.
+
+        Returns
+        -------
+        list[DataProduct]
+            A list of new data product items reported by DREAM.
+
+        Raises
+        ------
+        RuntimeError
+            If DREAM responds in an unexpected way.
+        """
+        response = await self.write(command="getNewDataProducts")
+        if response["msg_type"] != "list":
+            self.log.error(
+                f"In getStatus, received unexpected message type: {response['msg_type']}"
+            )
+            raise RuntimeError(
+                f"In getStatus, received unexpected message type: {response['msg_type']}"
+            )
+        if "new_products" not in response:
+            self.log.error("Unexpected format for getNewDataProducts message!")
+            raise RuntimeError("Unexpected format for getNewDataProducts message!")
+        return [DataProduct.from_dict(dp) for dp in response["new_products"]]

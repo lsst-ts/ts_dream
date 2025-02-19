@@ -72,8 +72,8 @@ CONFIG_SCHEMA = yaml.safe_load(
           Large File Annex S3 instance, for example "cp", "tuc" or  "ls".
         type: string
         pattern: "^[a-z0-9][.a-z0-9]*[a-z0-9]$"
-      url_root:
-        description: Root URL where DREAM data products are found.
+      data_product_path:
+        description: Local filesystem path for fallback storage of data products
         type: string
     required:
       - host
@@ -83,7 +83,7 @@ CONFIG_SCHEMA = yaml.safe_load(
       - poll_interval
       - ess_index
       - s3instance
-      - url_root
+      - data_product_path
     additionalProperties: false
     """
 )

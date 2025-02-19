@@ -40,7 +40,7 @@ logging.basicConfig(
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.http_server = MockDreamHTTPServer(port=53841)
+        self.http_server = MockDreamHTTPServer(port=5001)
         await self.http_server.start()
 
         self.srv = dream_csc.mock.MockDream(

@@ -536,7 +536,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         Given a DataProduct structure transmitted from DREAM, pull
         the file from the specified URL on the DREAM's HTTP server,
         and then copy it to the LFA. If writing to the LFA fails,
-        write the file to the local filesystem in the /tmp directory
+        write the file to the local filesystem in the configured
+        data product path directory (`self.config.data_product_path`)
         instead.
 
         Parameters
@@ -565,11 +566,13 @@ class DreamCsc(salobj.ConfigurableCsc):
             generator="dream",
             date=data_product.start,
             other=other,
-            suffix=".fits",
+            suffix=pathlib.Path(data_product.filename).suffix,
         )
 
         # Download the object with HTTP
-        dream_url = f"{self.config.url_root}/{data_product.filename}"
+        dream_url = (
+            f"http://{self.config.host}:{self.config.port+1}/{data_product.filename}"
+        )
         async with httpx.AsyncClient() as client:
             async with client.stream("GET", dream_url) as response:
                 response.raise_for_status()
@@ -621,23 +624,24 @@ class DreamCsc(salobj.ConfigurableCsc):
         key: `str`
             S3 style filename key to save to.
         """
+        if not self.config:
+            raise RuntimeError("Not yet configured")
+
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
-        filepath = pathlib.Path("/tmp") / self.s3bucket.name / key
+        filepath = (
+            pathlib.Path(self.config.data_product_path) / self.s3bucket.name / key
+        )
         dirpath = filepath.parent
         if not dirpath.exists():
             self.log.info(f"Creating directory {str(dirpath)}")
             dirpath.mkdir(parents=True, exist_ok=True)
 
-        with open(filepath, "wb") as tmp_file:
+        with open(filepath, "wb") as file:
             async for chunk in response.aiter_bytes():
-                tmp_file.write(chunk)
+                file.write(chunk)
 
-        await self.evt_largeFileObjectAvailable.set_write(
-            url=filepath.as_uri(),
-            generator="dream",
-        )
         self.log.info(f"Saved {key} to local disk at {filepath}")
 
 

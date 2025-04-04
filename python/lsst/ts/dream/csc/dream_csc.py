@@ -164,7 +164,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         # Set up the S3 bucket.
         if self.s3bucket is None:
-            domock = self.simulation_mode != 0
+            domock = self.config.s3instance == "test"
             self.s3bucket = salobj.AsyncS3Bucket(
                 name=self.s3bucket_name, domock=domock, create=domock
             )

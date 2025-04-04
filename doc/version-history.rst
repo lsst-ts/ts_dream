@@ -4,6 +4,11 @@
 Version History
 ###############
 
+v0.5.2
+======
+
+* Added auto-reconnect.
+
 v0.5.1
 ======
 

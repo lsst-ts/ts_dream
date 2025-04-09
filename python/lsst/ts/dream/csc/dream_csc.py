@@ -24,7 +24,6 @@ __all__ = ["DreamCsc", "run_dream"]
 import asyncio
 import enum
 import io
-import logging
 import pathlib
 import time
 from types import SimpleNamespace
@@ -99,11 +98,6 @@ class DreamCsc(salobj.ConfigurableCsc):
             simulation_mode=simulation_mode,
         )
 
-        self.loop_die_timeout = 5  # how many heartbeats to wait for the loops to die?
-
-        ch = logging.StreamHandler()
-        self.log.addHandler(ch)
-
         self.model: DreamModel | None = None
 
         # LFA related configuration:
@@ -112,36 +106,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.s3instance: str | None = None  # Set by `connect`.
 
         self.health_monitor_loop_task = utils.make_done_future()
-
-    async def wait_loop(self, loop: asyncio.Future) -> None:
-        """A utility method to wait for a task to die or cancel it and handle
-        the aftermath.
-
-        Taken from the DIMM CSC.
-
-        Parameters
-        ----------
-        loop : _asyncio.Future
-        """
-
-        # wait for telemetry loop to die or kill it if timeout
-        timeout = True
-        for i in range(self.loop_die_timeout):
-            if loop.done():
-                timeout = False
-                break
-            await asyncio.sleep(self.heartbeat_interval)
-        if timeout:
-            loop.cancel()
-
-        try:
-            await asyncio.wait_for(loop, timeout=self.loop_die_timeout)
-        except asyncio.CancelledError:
-            self.log.info("Loop cancelled...")
-        except Exception as e:
-            # Something else may have happened. I still want to disable as this
-            # will stop the loop on the target production
-            self.log.exception(e)
 
     async def connect(self) -> None:
         """Determine if running in local or remote mode and dispatch to the
@@ -234,6 +198,11 @@ class DreamCsc(salobj.ConfigurableCsc):
         """
         await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
         self.health_monitor_loop_task.cancel()
+        try:
+            await self.health_monitor_loop_task
+        except asyncio.CancelledError:
+            pass
+
         await self.disconnect()
         await super().begin_disable(id_data)
 
@@ -288,10 +257,11 @@ class DreamCsc(salobj.ConfigurableCsc):
         event and put the component in FAULT state.
         """
         while True:
-            if (
-                self.weather_and_status_loop_task.done()
-                or self.data_product_loop_task.done()
-            ):
+            if self.weather_and_status_loop_task.done():
+                self.log.warning("Weather and status loop health monitor tripped.")
+                break
+            if self.data_product_loop_task.done():
+                self.log.warning("Data product loop health monitor tripped.")
                 break
             await asyncio.sleep(self.heartbeat_interval)
 
@@ -335,6 +305,10 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     async def do_pause(self, data: salobj.BaseMsgType) -> None:
         self.health_monitor_loop_task.cancel()
+        try:
+            await self.health_monitor_loop_task
+        except asyncio.CancelledError:
+            pass
         await self.disconnect()
 
     async def do_resume(self, data: salobj.BaseMsgType) -> None:

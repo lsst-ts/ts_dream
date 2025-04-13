@@ -258,10 +258,18 @@ class DreamCsc(salobj.ConfigurableCsc):
         """
         while True:
             if self.weather_and_status_loop_task.done():
-                self.log.warning("Weather and status loop health monitor tripped.")
+                if (exc := self.weather_and_status_loop_task.exception()) is not None:
+                    self.log.exception(
+                        "Weather and status loop health monitor tripped.", exc_info=exc
+                    )
+                else:
+                    self.log.warning("Weather and status loop health monitor tripped.")
                 break
             if self.data_product_loop_task.done():
-                self.log.warning("Data product loop health monitor tripped.")
+                if (exc := self.data_product_loop_task.exception()) is not None:
+                    self.log.exception("Data product loop tripped.", exc_info=exc)
+                else:
+                    self.log.warning("Data product loop health monitor tripped.")
                 break
             await asyncio.sleep(self.heartbeat_interval)
 
@@ -343,6 +351,11 @@ class DreamCsc(salobj.ConfigurableCsc):
                         return
 
             await asyncio.sleep(self.config.poll_interval)
+
+        if self.model is None:
+            self.log.warning("Data product loop terminating: self.model is None")
+        else:
+            self.log.warning(f"Data product loop terminating: {self.model.connected=}")
 
     async def weather_and_status_loop(self) -> None:
         """Periodically check DREAM status and weather station and send a flag.

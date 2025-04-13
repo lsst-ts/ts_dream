@@ -149,16 +149,26 @@ class DreamModel:
                 {"action": command, "request_id": request_id, **parameters}
             )
 
-            response = await self.read()
+            for _ in range(10):
+                response = await self.read()
 
-        if "request_id" not in response:
-            self.log.error("No request_id in response from DREAM")
-            raise RuntimeError("No request_id in response from DREAM")
-        if response["request_id"] != request_id:
-            self.log.error(f"Received unexpected request_id: {response['request_id']}")
-            raise RuntimeError(
-                f"Received unexpected request_id: {response['request_id']}"
-            )
+                if "request_id" not in response:
+                    self.log.error("No request_id in response from DREAM")
+                    raise RuntimeError("No request_id in response from DREAM")
+
+                if response["request_id"] == request_id:
+                    break
+                elif response["request_id"] > request_id:
+                    raise RuntimeError(
+                        f"Received request_id {response['request_id']} is greater than expected "
+                        f"{request_id=}; response may have been skipped or dropped."
+                    )
+            else:
+                raise RuntimeError(
+                    f"Did not receive expected {request_id=} after 10 reads. "
+                    f"Last seen: {response['request_id']}"
+                )
+
         if "result" not in response:
             self.log.error("Required key 'result' not found in response from DREAM")
             raise RuntimeError("Required key 'result' not found in response from DREAM")

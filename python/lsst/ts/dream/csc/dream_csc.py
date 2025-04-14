@@ -329,10 +329,12 @@ class DreamCsc(salobj.ConfigurableCsc):
             raise RuntimeError("Not yet configured")
 
         while self.model is not None and self.model.connected:
-            self.log.debug("Checking for new data products...")
+            self.log.debug("*** NOT *** Checking for new data products...")
 
             if self.model is not None:
-                data_products = await self.model.get_new_data_products()
+                data_products: list[DataProduct] = (
+                    []
+                )  # TEMPORARY await self.model.get_new_data_products()
                 for data_product in data_products:
                     self.log.info(f"New data product: {data_product.filename}")
                     try:

@@ -24,6 +24,7 @@ __all__ = ["DataProduct", "DreamModel"]
 import asyncio
 import logging
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Literal, Type, TypeVar
 
@@ -55,8 +56,8 @@ class DataProduct:
     @classmethod
     def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
         """Build a dataclass object from dictionary with time in ISO format."""
-        data["start"] = Time(data["start"])
-        data["end"] = Time(data["end"])
+        data["start"] = Time(datetime.fromisoformat(data["start"]))
+        data["end"] = Time(datetime.fromisoformat(data["end"]))
         return cls(**data)
 
 

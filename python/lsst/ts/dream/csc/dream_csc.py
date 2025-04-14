@@ -651,7 +651,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         dream_url = (
             f"http://{self.config.host}:{self.config.port+1}/{data_product.filename}"
         )
-        async with httpx.AsyncClient() as client:
+        timeout = httpx.Timeout(300.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("GET", dream_url) as response:
                 response.raise_for_status()
 

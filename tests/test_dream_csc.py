@@ -84,6 +84,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=simulation_mode,
             log_level=log_level,
         ), MockWeather(initial_state=salobj.State.ENABLED) as self.weather_csc:
+            await self.weather_csc.start_task
             await self.weather_csc.evt_summaryState.set_write(
                 summaryState=salobj.State.ENABLED
             )

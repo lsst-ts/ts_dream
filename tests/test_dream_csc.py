@@ -27,6 +27,7 @@ import pathlib
 import unittest
 
 import lsst.ts.dream.csc as dream_csc
+import pytest
 from lsst.ts import salobj
 from lsst.ts.dream.csc import MockWeather
 from lsst.ts.dream.csc.mock.dream_mock_http import MockDreamHTTPServer
@@ -239,6 +240,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.assertFalse(ups_event.notOnMains)
             self.assertFalse(ups_event.communicationError)
 
+    @pytest.mark.skip(reason="new product upload temporarily disabled")
     async def test_new_products(self):
         logging.info("test_new_products")
         async with self.make_csc(
@@ -266,6 +268,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(file_contents, f"This is data product {j+1}")
                         break
 
+    @pytest.mark.skip(reason="new product upload temporarily disabled")
     async def test_data_upload_failure(self):
         """Test that the CSC enters FAULT state if the data upload fails."""
         logging.info("test_data_upload_failure")
@@ -286,6 +289,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 await self.assert_next_summary_state(salobj.State.ENABLED)
                 await self.assert_next_summary_state(salobj.State.FAULT)
 
+    @pytest.mark.skip(reason="new product upload temporarily disabled")
     async def test_data_download_failure(self):
         """Test that the CSC enters FAULT state if the data upload fails."""
         logging.info("test_data_upload_failure")

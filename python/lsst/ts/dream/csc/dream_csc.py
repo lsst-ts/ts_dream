@@ -153,8 +153,9 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
         )
-        self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
         self.health_monitor_loop_task = asyncio.create_task(self.health_monitor())
+        if self.config.run_data_product_loop:
+            self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
 
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
@@ -251,6 +252,9 @@ class DreamCsc(salobj.ConfigurableCsc):
         `errorCode`
         event and put the component in FAULT state.
         """
+        if not self.config:
+            raise RuntimeError("Not yet configured")
+
         while True:
             if self.weather_and_status_loop_task.done():
                 if (exc := self.weather_and_status_loop_task.exception()) is not None:
@@ -260,7 +264,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                 else:
                     self.log.warning("Weather and status loop health monitor tripped.")
                 break
-            if self.data_product_loop_task.done():
+            if self.config.run_data_product_loop and self.data_product_loop_task.done():
                 if (exc := self.data_product_loop_task.exception()) is not None:
                     self.log.exception("Data product loop tripped.", exc_info=exc)
                 else:

@@ -36,7 +36,7 @@ from . import CONFIG_SCHEMA, __version__
 from .mock import MockDream
 from .model import DataProduct, DreamModel
 
-SAL_TIMEOUT = 10.0
+SAL_TIMEOUT = 120.0
 CSC_RESET_SLEEP_TIME = 180.0
 RECONNECT_TIMEOUT = 180.0
 MAXIMUM_RECONNECT_WAIT = 60.0

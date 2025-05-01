@@ -370,23 +370,22 @@ class DreamCsc(salobj.ConfigurableCsc):
         async with salobj.Remote(
             domain=self.domain, name="ESS", index=self.config.ess_index
         ) as ess_remote:
+            self.weather_ok_flag = None
+
+            # Wait for the CSC to establish its connection.
+            await asyncio.sleep(BASE_RECONNECT_WAIT)
+
             while self.model is not None and self.model.connected:
-
                 self.log.debug("Checking weather and DREAM status...")
-
-                self.weather_ok_flag = None
-
-                # Wait for the CSC to establish its connection.
-                await asyncio.sleep(SAL_TIMEOUT)
 
                 try:
                     # Get weather data.
                     weather_ok_flag = True
-                    air_flow = await ess_remote.tel_airFlow.next(
-                        flush=True,
+                    air_flow = await ess_remote.tel_airFlow.aget(
                         timeout=SAL_TIMEOUT,
                     )
-                    if air_flow is None or air_flow.speed > 25:
+                    air_flow_age = utils.current_tai() - air_flow.private_sndStamp
+                    if air_flow is None or air_flow.speed > 25 or air_flow_age > 300:
                         weather_ok_flag = False
 
                     precipitation = await ess_remote.evt_precipitation.aget(
@@ -401,6 +400,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                         f"""
                         Weather report:
                         {air_flow.speed=}
+                        {air_flow_age=}
                         {precipitation.raining=}
                         {precipitation.snowing=}
                         {weather_ok_flag=}

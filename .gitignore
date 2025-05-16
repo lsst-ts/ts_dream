@@ -7,11 +7,13 @@ config.log
 *.cfgc
 *.pyc
 *_wrap.cc
+*.egg-info/
 *Lib.py
+.eggs/
+.githooks/
 
 # Built by sconsUtils
 version.py
-bin/
 
 # Pytest
 tests/.tests
@@ -19,3 +21,15 @@ pytest_session.txt
 .cache/
 .pytest_cache
 .coverage
+ospl-error.log
+ospl-info.log
+
+.idea/
+.vscode/
+.pre-commit-config.yaml
+.clang-format
+.flake8
+.isort.cfg
+.mypy.ini
+.ruff.toml
+towncrier.toml

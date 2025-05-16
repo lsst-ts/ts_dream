@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     $schema: http://json-schema.org/draft-07/schema#
     $id: https://github.com/lsst-ts/ts_dream/blob/master/python/lsst/ts/dream/csc/config_schema.py
     # title must end with one or more spaces followed by the schema version, which must begin with "v"
-    title: DREAM v4
+    title: DREAM v5
     description: Schema for DREAM configuration files
     type: object
     properties:
@@ -75,6 +75,9 @@ CONFIG_SCHEMA = yaml.safe_load(
       data_product_path:
         description: Local filesystem path for fallback storage of data products
         type: string
+      run_data_product_loop:
+        description: If true, the CSC should collect data products from DREAM
+        type: boolean
     required:
       - host
       - port
@@ -84,6 +87,7 @@ CONFIG_SCHEMA = yaml.safe_load(
       - ess_index
       - s3instance
       - data_product_path
+      - run_data_product_loop
     additionalProperties: false
     """
 )

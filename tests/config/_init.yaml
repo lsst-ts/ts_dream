@@ -7,3 +7,4 @@ ess_index: 301
 battery_low_threshold: 25
 s3instance: test
 data_product_path: /tmp
+run_data_product_loop: true

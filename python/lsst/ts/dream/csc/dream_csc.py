@@ -24,7 +24,6 @@ __all__ = ["DreamCsc", "run_dream"]
 import asyncio
 import enum
 import io
-import logging
 import pathlib
 import time
 from types import SimpleNamespace
@@ -37,7 +36,7 @@ from . import CONFIG_SCHEMA, __version__
 from .mock import MockDream
 from .model import DataProduct, DreamModel
 
-SAL_TIMEOUT = 10.0
+SAL_TIMEOUT = 120.0
 CSC_RESET_SLEEP_TIME = 180.0
 RECONNECT_TIMEOUT = 180.0
 MAXIMUM_RECONNECT_WAIT = 60.0
@@ -85,7 +84,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.mock_port: int | None = mock_port
 
         # Remote CSC for the weather data.
-        self.ess_remote: salobj.Remote | None = None
         self.weather_and_status_loop_task = utils.make_done_future()
         self.data_product_loop_task = utils.make_done_future()
         self.weather_ok_flag: bool | None = None
@@ -99,11 +97,6 @@ class DreamCsc(salobj.ConfigurableCsc):
             simulation_mode=simulation_mode,
         )
 
-        self.loop_die_timeout = 5  # how many heartbeats to wait for the loops to die?
-
-        ch = logging.StreamHandler()
-        self.log.addHandler(ch)
-
         self.model: DreamModel | None = None
 
         # LFA related configuration:
@@ -112,36 +105,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.s3instance: str | None = None  # Set by `connect`.
 
         self.health_monitor_loop_task = utils.make_done_future()
-
-    async def wait_loop(self, loop: asyncio.Future) -> None:
-        """A utility method to wait for a task to die or cancel it and handle
-        the aftermath.
-
-        Taken from the DIMM CSC.
-
-        Parameters
-        ----------
-        loop : _asyncio.Future
-        """
-
-        # wait for telemetry loop to die or kill it if timeout
-        timeout = True
-        for i in range(self.loop_die_timeout):
-            if loop.done():
-                timeout = False
-                break
-            await asyncio.sleep(self.heartbeat_interval)
-        if timeout:
-            loop.cancel()
-
-        try:
-            await asyncio.wait_for(loop, timeout=self.loop_die_timeout)
-        except asyncio.CancelledError:
-            self.log.info("Loop cancelled...")
-        except Exception as e:
-            # Something else may have happened. I still want to disable as this
-            # will stop the loop on the target production
-            self.log.exception(e)
 
     async def connect(self) -> None:
         """Determine if running in local or remote mode and dispatch to the
@@ -190,8 +153,9 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
         )
-        self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
         self.health_monitor_loop_task = asyncio.create_task(self.health_monitor())
+        if self.config.run_data_product_loop:
+            self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
 
     async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
         """End do_enable; called after state changes but before command
@@ -234,6 +198,11 @@ class DreamCsc(salobj.ConfigurableCsc):
         """
         await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
         self.health_monitor_loop_task.cancel()
+        try:
+            await self.health_monitor_loop_task
+        except asyncio.CancelledError:
+            pass
+
         await self.disconnect()
         await super().begin_disable(id_data)
 
@@ -269,10 +238,6 @@ class DreamCsc(salobj.ConfigurableCsc):
             return_exceptions=True,
         )
 
-        if self.ess_remote is not None:
-            await self.ess_remote.close()
-            self.ess_remote = None
-
         self.log.info("Disconnected.")
 
     async def configure(self, config: SimpleNamespace) -> None:
@@ -287,11 +252,23 @@ class DreamCsc(salobj.ConfigurableCsc):
         `errorCode`
         event and put the component in FAULT state.
         """
+        if not self.config:
+            raise RuntimeError("Not yet configured")
+
         while True:
-            if (
-                self.weather_and_status_loop_task.done()
-                or self.data_product_loop_task.done()
-            ):
+            if self.weather_and_status_loop_task.done():
+                if (exc := self.weather_and_status_loop_task.exception()) is not None:
+                    self.log.exception(
+                        "Weather and status loop health monitor tripped.", exc_info=exc
+                    )
+                else:
+                    self.log.warning("Weather and status loop health monitor tripped.")
+                break
+            if self.config.run_data_product_loop and self.data_product_loop_task.done():
+                if (exc := self.data_product_loop_task.exception()) is not None:
+                    self.log.exception("Data product loop tripped.", exc_info=exc)
+                else:
+                    self.log.warning("Data product loop health monitor tripped.")
                 break
             await asyncio.sleep(self.heartbeat_interval)
 
@@ -335,6 +312,10 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     async def do_pause(self, data: salobj.BaseMsgType) -> None:
         self.health_monitor_loop_task.cancel()
+        try:
+            await self.health_monitor_loop_task
+        except asyncio.CancelledError:
+            pass
         await self.disconnect()
 
     async def do_resume(self, data: salobj.BaseMsgType) -> None:
@@ -370,6 +351,11 @@ class DreamCsc(salobj.ConfigurableCsc):
 
             await asyncio.sleep(self.config.poll_interval)
 
+        if self.model is None:
+            self.log.warning("Data product loop terminating: self.model is None")
+        else:
+            self.log.warning(f"Data product loop terminating: {self.model.connected=}")
+
     async def weather_and_status_loop(self) -> None:
         """Periodically check DREAM status and weather station and send a flag.
 
@@ -381,36 +367,28 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         ess_retries = 5
 
-        while self.model is not None and self.model.connected:
-            self.log.debug("Checking weather and DREAM status...")
+        async with salobj.Remote(
+            domain=self.domain, name="ESS", index=self.config.ess_index
+        ) as ess_remote:
+            self.weather_ok_flag = None
 
-            if self.simulation_mode == 0:
-                if self.ess_remote is None:
-                    self.ess_remote = salobj.Remote(
-                        domain=self.domain, name="ESS", index=self.config.ess_index
-                    )
-                    await self.ess_remote.start_task
-                    self.log.debug(f"Connected to ESS:{self.config.ess_index}.")
+            # Wait for the CSC to establish its connection.
+            await asyncio.sleep(BASE_RECONNECT_WAIT)
 
-                    self.weather_ok_flag = None
-                    if self.ess_remote is None:
-                        self.log.error("Failed to connect to weather CSC.")
-                        continue
-
-                    # Wait for the CSC to establish its connection.
-                    await asyncio.sleep(SAL_TIMEOUT)
+            while self.model is not None and self.model.connected:
+                self.log.debug("Checking weather and DREAM status...")
 
                 try:
                     # Get weather data.
                     weather_ok_flag = True
-                    air_flow = await self.ess_remote.tel_airFlow.next(
-                        flush=True,
+                    air_flow = await ess_remote.tel_airFlow.aget(
                         timeout=SAL_TIMEOUT,
                     )
-                    if air_flow is None or air_flow.speed > 25:
+                    air_flow_age = utils.current_tai() - air_flow.private_sndStamp
+                    if air_flow is None or air_flow.speed > 25 or air_flow_age > 300:
                         weather_ok_flag = False
 
-                    precipitation = await self.ess_remote.evt_precipitation.aget(
+                    precipitation = await ess_remote.evt_precipitation.aget(
                         timeout=SAL_TIMEOUT
                     )
                     if precipitation is None or (
@@ -422,6 +400,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                         f"""
                         Weather report:
                         {air_flow.speed=}
+                        {air_flow_age=}
                         {precipitation.raining=}
                         {precipitation.snowing=}
                         {weather_ok_flag=}
@@ -429,9 +408,6 @@ class DreamCsc(salobj.ConfigurableCsc):
                     )
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
-                    if self.ess_remote is not None:
-                        await self.ess_remote.close()
-                        self.ess_remote = None
                     await asyncio.sleep(CSC_RESET_SLEEP_TIME)  # A little extra safety
 
                     ess_retries -= 1
@@ -447,42 +423,40 @@ class DreamCsc(salobj.ConfigurableCsc):
 
                     continue
 
-            else:
-                # In simulation mode, don't try to read the weather station.
-                weather_ok_flag = True
-
-            try:
-                # Send weather flag
-                if self.model is not None:
-                    await self.model.set_weather_ok(weather_ok_flag)
-                    self.weather_ok_flag = weather_ok_flag
-                else:
-                    self.log.info("Weather loop ending because of TCP disconnection.")
-                    return
-            except Exception:
-                self.log.exception("Failed to send weather flag!")
-                raise
-
-            try:
-                # Get status information and emit telemetry.
                 try:
-                    status_data = await self.model.get_status()
-                    await self.send_telemetry(status_data)
-                    await self.send_events(status_data)
-
-                except KeyError:
-                    self.log.exception("Status had unexpected format!")
+                    # Send weather flag
+                    if self.model is not None:
+                        await self.model.set_weather_ok(weather_ok_flag)
+                        self.weather_ok_flag = weather_ok_flag
+                    else:
+                        self.log.info(
+                            "Weather loop ending because of TCP disconnection."
+                        )
+                        return
+                except Exception:
+                    self.log.exception("Failed to send weather flag!")
                     raise
-            except Exception:
-                self.log.exception("Failed to get DREAM status!")
-                raise
 
-            # Sleep for a bit.
-            try:
-                await asyncio.sleep(self.config.poll_interval)
-            except asyncio.CancelledError:
-                self.log.info("Weather loop ending because of asyncio cancel.")
-                raise
+                try:
+                    # Get status information and emit telemetry.
+                    try:
+                        status_data = await self.model.get_status()
+                        await self.send_telemetry(status_data)
+                        await self.send_events(status_data)
+
+                    except KeyError:
+                        self.log.exception("Status had unexpected format!")
+                        raise
+                except Exception:
+                    self.log.exception("Failed to get DREAM status!")
+                    raise
+
+                # Sleep for a bit.
+                try:
+                    await asyncio.sleep(self.config.poll_interval)
+                except asyncio.CancelledError:
+                    self.log.info("Weather loop ending because of asyncio cancel.")
+                    raise
 
     async def send_telemetry(self, status_data: dict[str, Any]) -> None:
         """Sends telemetry from the CSC based on status information.
@@ -681,7 +655,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         dream_url = (
             f"http://{self.config.host}:{self.config.port+1}/{data_product.filename}"
         )
-        async with httpx.AsyncClient() as client:
+        timeout = httpx.Timeout(300.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("GET", dream_url) as response:
                 response.raise_for_status()
 

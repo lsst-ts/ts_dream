@@ -21,12 +21,14 @@
 
 #  type: ignore
 
+import contextlib
 import logging
 import pathlib
 import unittest
 
 import lsst.ts.dream.csc as dream_csc
 from lsst.ts import salobj
+from lsst.ts.dream.csc import MockWeather
 from lsst.ts.dream.csc.mock.dream_mock_http import MockDreamHTTPServer
 
 STD_TIMEOUT = 2  # standard command timeout (sec)
@@ -66,8 +68,29 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             mock_port=self.mock_port,
         )
 
-    async def test_standard_state_transitions(self):
+    @contextlib.asynccontextmanager
+    async def make_csc(
+        self,
+        initial_state,
+        config_dir=TEST_CONFIG_DIR,
+        override="",
+        simulation_mode=0,
+        log_level=None,
+    ):
+        async with super().make_csc(
+            initial_state=initial_state,
+            config_dir=config_dir,
+            override=override,
+            simulation_mode=simulation_mode,
+            log_level=log_level,
+        ), MockWeather(initial_state=salobj.State.ENABLED) as self.weather_csc:
+            await self.weather_csc.start_task
+            await self.weather_csc.evt_summaryState.set_write(
+                summaryState=salobj.State.ENABLED
+            )
+            yield
 
+    async def test_standard_state_transitions(self):
         async with self.make_csc(
             initial_state=salobj.State.STANDBY,
             config_dir=TEST_CONFIG_DIR,

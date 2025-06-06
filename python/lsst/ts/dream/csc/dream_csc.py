@@ -148,7 +148,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         if self.model is None:
             self.model = DreamModel(config=self.config, log=self.log)
         await self.model.connect(host=host, port=port)
-        await self.model.open_roof()
 
         self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
@@ -157,15 +156,16 @@ class DreamCsc(salobj.ConfigurableCsc):
         if self.config.run_data_product_loop:
             self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
 
-    async def end_enable(self, id_data: salobj.BaseDdsDataType) -> None:
-        """End do_enable; called after state changes but before command
+    async def end_start(self, id_data: salobj.BaseMsgType) -> None:
+        """End do_start; called after state changes but before command
         acknowledged.
 
-        This method connects to the DREAM Instrument and starts it.
+        This method connects to the DREAM Instrument and starts it. It
+        does not issue setRoof, because that happens during enable.
 
         Parameters
         ----------
-        id_data : `CommandIdData`
+        id_data : `salobj.BaseMsgType`
             Command ID and data
         """
         if not self.config:
@@ -183,17 +183,34 @@ class DreamCsc(salobj.ConfigurableCsc):
                 self.log.exception(err_msg)
                 await self.fault(code=ErrorCode.TCPIP_CONNECT_ERROR, report=err_msg)
 
-        await super().end_enable(id_data)
+        await super().end_start(id_data)
 
-    async def begin_disable(self, id_data: salobj.BaseDdsDataType) -> None:
-        """Begin do_disable; called before state changes.
+    async def end_enable(self, id_data: salobj.BaseMsgType) -> None:
+        """End do_enable; called after state changes but before command
+        acknowledged.
 
-        This method will try to gracefully stop the ESS Instrument and then
-        disconnect from it.
+        This method issues setRoof open to DREAM.
 
         Parameters
         ----------
-        id_data : `CommandIdData`
+        id_data : `salobj.BaseMsgType`
+            Command ID and data
+        """
+        if self.model is None:
+            raise RuntimeError("No model connected.")
+
+        await self.model.open_roof()
+        await super().end_enable(id_data)
+
+    async def begin_standby(self, id_data: salobj.BaseMsgType) -> None:
+        """Begin do_standby; called before state changes.
+
+        This method will try to gracefully stop the ESS Instrument and then
+        disconnect from it, and disconnect from the DREAM TCP server.
+
+        Parameters
+        ----------
+        id_data : `salobj.BaseMsgType`
             Command ID and data
         """
         await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
@@ -204,6 +221,22 @@ class DreamCsc(salobj.ConfigurableCsc):
             pass
 
         await self.disconnect()
+        await super().begin_standby(id_data)
+
+    async def begin_disable(self, id_data: salobj.BaseMsgType) -> None:
+        """Begin do_disable; called before state changes.
+
+        This method will close the roof with the setRoof command.
+
+        Parameters
+        ----------
+        id_data : `CommandIdData`
+            Command ID and data
+        """
+        if self.model is None:
+            raise RuntimeError("No model connected.")
+
+        await self.model.close_roof()
         await super().begin_disable(id_data)
 
     async def disconnect(self, close_roof: bool = True) -> None:

@@ -128,6 +128,23 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 subsystemVersions="",
             )
 
+    async def test_disable(self):
+        logging.info("test_dome_telemetry")
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            self.assertFalse(self.srv.roof)
+            await self.remote.cmd_start.set_start()
+            self.assertFalse(self.srv.roof)
+            await self.remote.cmd_enable.set_start()
+            self.assertTrue(self.srv.roof)  # setRoof=true should have been issued
+            await self.remote.cmd_disable.set_start()
+            self.assertFalse(self.srv.roof)
+            await self.remote.cmd_standby.set_start()
+            self.assertFalse(self.srv.roof)
+
     async def test_dome_telemetry(self):
         logging.info("test_dome_telemetry")
         async with self.make_csc(

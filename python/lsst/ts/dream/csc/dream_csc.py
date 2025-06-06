@@ -338,7 +338,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             if self.model is not None:
                 data_products = await self.model.get_new_data_products()
                 for data_product in data_products:
-                    self.log.info(f"New data product: {data_product.filename}")
+                    self.log.debug(f"New data product: {data_product.filename}")
                     try:
                         await self.upload_data_product(data_product)
                     except Exception as e:
@@ -635,6 +635,12 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
+        if self.config.skip_tmpdata_products and data_product.filename.startswith(
+            "/tmpdata/"
+        ):
+            self.log.debug(f"Skipping temporary data file {data_product.filename}")
+            return
+
         # Set up an LFA bucket key
         product_type = "" if data_product.type is None else f"_{data_product.type}"
         other = (
@@ -652,9 +658,14 @@ class DreamCsc(salobj.ConfigurableCsc):
         )
 
         # Download the object with HTTP
-        dream_url = (
-            f"http://{self.config.host}:{self.config.port+1}/{data_product.filename}"
-        )
+        server = data_product.server
+        if server not in self.config.data_product_host:
+            raise RuntimeError(
+                f"Unexpected data product server specified: {data_product.server}"
+            )
+        data_product_host = self.config.data_product_host[server]
+        dream_url = f"http://{data_product_host}/{data_product.filename}"
+
         timeout = httpx.Timeout(300.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("GET", dream_url) as response:

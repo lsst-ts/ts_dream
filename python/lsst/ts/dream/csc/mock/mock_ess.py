@@ -60,16 +60,24 @@ class MockWeather(salobj.BaseCsc):
             location="",
         )
 
-    async def close_tasks(self) -> None:
+    async def cancel_telemetry_task(self) -> None:
         self.telemetry_task.cancel()
+        try:
+            await self.telemetry_task
+        except asyncio.CancelledError:
+            pass
+
+    async def close_tasks(self) -> None:
+        await self.cancel_telemetry_task()
         await super().close_tasks()
 
     async def handle_summary_state(self) -> None:
         await super().handle_summary_state()
         if self.disabled_or_enabled:
-            self.telemetry_task = asyncio.create_task(self.telemetry_loop())
-        elif not self.telemetry_task.done():
-            self.telemetry_task.cancel()
+            if self.telemetry_task.done():
+                self.telemetry_task = asyncio.create_task(self.telemetry_loop())
+        else:
+            await self.cancel_telemetry_task()
 
     async def telemetry_loop(self) -> None:
         while True:

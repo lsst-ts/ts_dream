@@ -234,8 +234,7 @@ class MockDream(tcpip.OneClientServer):
 
         # Weather information data used for determining whether the hatch can
         # be opened or not.
-        self.safe_observing_conditions: bool = False
-        self.cloud_cover: int = 0
+        self.roof: bool = False
 
         super().__init__(
             name=self.name,
@@ -443,6 +442,7 @@ class MockDream(tcpip.OneClientServer):
                 "result": "error",
                 "reason": "data required",
             }
+        self.roof = data  # Record state for check in unit testing
         return dict()
 
     async def heartbeat(self, data: bool | None) -> dict:

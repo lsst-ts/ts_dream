@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     $schema: http://json-schema.org/draft-07/schema#
     $id: https://github.com/lsst-ts/ts_dream/blob/master/python/lsst/ts/dream/csc/config_schema.py
     # title must end with one or more spaces followed by the schema version, which must begin with "v"
-    title: DREAM v5
+    title: DREAM v6
     description: Schema for DREAM configuration files
     type: object
     properties:
@@ -72,11 +72,37 @@ CONFIG_SCHEMA = yaml.safe_load(
           Large File Annex S3 instance, for example "cp", "tuc" or  "ls".
         type: string
         pattern: "^[a-z0-9][.a-z0-9]*[a-z0-9]$"
+      data_product_host:
+        description: >
+          Mapping of directions to servers where DREAM data are located.
+          Each key corresponds to a direction (N, S, E, W, C) and maps to
+          a hostname.
+        type: object
+        properties:
+          N:
+            type: string
+          S:
+            type: string
+          E:
+            type: string
+          W:
+            type: string
+          C:
+            type: string
+          B:
+            type: string
+        required: [N, S, E, W, C, B]
+        additionalProperties: false
       data_product_path:
         description: Local filesystem path for fallback storage of data products
         type: string
       run_data_product_loop:
         description: If true, the CSC should collect data products from DREAM
+        type: boolean
+      skip_tmpdata_products:
+        description: >-
+          If true, the CSC should not save data products from DREAM that have
+          a file path starting with "/tmpdata/".
         type: boolean
     required:
       - host
@@ -85,9 +111,12 @@ CONFIG_SCHEMA = yaml.safe_load(
       - read_timeout
       - poll_interval
       - ess_index
+      - battery_low_threshold
       - s3instance
+      - data_product_host
       - data_product_path
       - run_data_product_loop
+      - skip_tmpdata_products
     additionalProperties: false
     """
 )

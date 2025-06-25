@@ -251,6 +251,16 @@ class DreamCsc(salobj.ConfigurableCsc):
             raise RuntimeError("Not yet configured")
 
         self.log.info("Disconnecting")
+
+        # End the monitor loops.
+        self.weather_and_status_loop_task.cancel()
+        self.data_product_loop_task.cancel()
+        await asyncio.gather(
+            self.weather_and_status_loop_task,
+            self.data_product_loop_task,
+            return_exceptions=True,
+        )
+
         if self.model is not None:
             if close_roof:
                 try:
@@ -263,14 +273,6 @@ class DreamCsc(salobj.ConfigurableCsc):
             await self.mock.close()
             self.mock = None
 
-        self.weather_and_status_loop_task.cancel()
-        self.data_product_loop_task.cancel()
-        await asyncio.gather(
-            self.weather_and_status_loop_task,
-            self.data_product_loop_task,
-            return_exceptions=True,
-        )
-
         self.log.info("Disconnected.")
 
     async def configure(self, config: SimpleNamespace) -> None:
@@ -281,9 +283,8 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     async def health_monitor(self) -> None:
         """This loop monitors the health of the DREAM controller and the status
-        and data product loops. If an issue happen it will output the
-        `errorCode`
-        event and put the component in FAULT state.
+        and data product loops. If an issue happens it will disconnect and
+        reconnect. If unable to reconnect, it will FAULT the CSC.
         """
         if not self.config:
             raise RuntimeError("Not yet configured")
@@ -318,7 +319,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                 attempt_number += 1
                 await self.connect()
                 self.log.info("Reconnected.")
-                return
+                return  # A new health monitor was spawned by connect().
             except Exception as e:
                 self.log.exception(f"Reconnection attempt failed: {e!r}")
                 sleep_time = min(
@@ -380,7 +381,6 @@ class DreamCsc(salobj.ConfigurableCsc):
                         await self.fault(
                             code=ErrorCode.UPLOAD_DATA_PRODUCT_FAILED, report=err_msg
                         )
-                        return
 
             await asyncio.sleep(self.config.poll_interval)
 

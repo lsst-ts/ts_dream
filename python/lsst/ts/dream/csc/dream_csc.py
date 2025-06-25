@@ -701,6 +701,11 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         timeout = httpx.Timeout(300.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
+            # First get the headers to check for redirect.
+            head = await client.get(dream_url, follow_redirects=True)
+            head.raise_for_status()
+            dream_url = str(head.url)
+
             async with client.stream("GET", dream_url) as response:
                 response.raise_for_status()
 

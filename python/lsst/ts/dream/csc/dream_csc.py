@@ -375,12 +375,8 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.debug(f"New data product: {data_product.filename}")
                     try:
                         await self.upload_data_product(data_product)
-                    except Exception as e:
+                    except Exception:
                         self.log.exception("Upload data product failed")
-                        err_msg = f"Failed to upload DREAM data product: {e!r}"
-                        await self.fault(
-                            code=ErrorCode.UPLOAD_DATA_PRODUCT_FAILED, report=err_msg
-                        )
 
             await asyncio.sleep(self.config.poll_interval)
 

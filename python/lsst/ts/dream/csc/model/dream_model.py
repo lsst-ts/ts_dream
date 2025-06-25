@@ -115,6 +115,7 @@ class DreamModel:
         if not self.connected:
             raise RuntimeError("Not connected")
 
+        self.client._reader._limit = 100_000_000
         data = await asyncio.wait_for(
             self.client.read_json(), timeout=self.config.read_timeout
         )

@@ -409,11 +409,16 @@ class DreamCsc(salobj.ConfigurableCsc):
 
                 try:
                     # Get weather data.
+                    current_time = utils.current_tai()
                     weather_ok_flag = True
                     air_flow = await ess_remote.tel_airFlow.aget(
                         timeout=SAL_TIMEOUT,
                     )
-                    air_flow_age = utils.current_tai() - air_flow.private_sndStamp
+                    air_flow_age = (
+                        1_000_000
+                        if air_flow is None
+                        else current_time - air_flow.private_sndStamp
+                    )
                     if air_flow is None or air_flow.speed > 25 or air_flow_age > 300:
                         weather_ok_flag = False
 
@@ -425,11 +430,28 @@ class DreamCsc(salobj.ConfigurableCsc):
                     ):
                         weather_ok_flag = False
 
+                    humidity = await ess_remote.tel_relativeHumidity.aget(
+                        timeout=SAL_TIMEOUT
+                    )
+                    humidity_age = (
+                        1_000_000
+                        if humidity is None
+                        else current_time - humidity.private_sndStamp
+                    )
+                    if (
+                        humidity is None
+                        or humidity.relativeHumidityItem >= 90
+                        or humidity_age > 300
+                    ):
+                        weather_ok_flag = False
+
                     self.log.debug(
                         f"""
                         Weather report:
                         {air_flow.speed=}
                         {air_flow_age=}
+                        {humidity.relativeHumidityItem=}
+                        {humidity_age=}
                         {precipitation.raining=}
                         {precipitation.snowing=}
                         {weather_ok_flag=}

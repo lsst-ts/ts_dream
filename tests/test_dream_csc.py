@@ -152,7 +152,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            dome_telemetry = await self.remote.tel_dome.next(flush=False)
+            dome_telemetry = await self.remote.tel_dome.next(
+                timeout=STD_TIMEOUT, flush=False
+            )
             self.assertEqual(dome_telemetry.encoder, 110)
 
     async def test_environment_telemetry(self):
@@ -162,7 +164,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            environment_telemetry = await self.remote.tel_environment.next(flush=False)
+            environment_telemetry = await self.remote.tel_environment.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
             self.assertAlmostEqual(
                 environment_telemetry.temperature[0], 25.9606, places=4
             )
@@ -183,7 +187,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            power_supply_telemetry = await self.remote.tel_powerSupply.next(flush=False)
+            power_supply_telemetry = await self.remote.tel_powerSupply.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
             self.assertAlmostEqual(power_supply_telemetry.voltage[0], 0.0405, places=4)
             self.assertAlmostEqual(power_supply_telemetry.voltage[1], 0.0, places=4)
             self.assertAlmostEqual(
@@ -198,7 +204,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            ups_telemetry = await self.remote.tel_ups.next(flush=False)
+            ups_telemetry = await self.remote.tel_ups.next(
+                timeout=STD_TIMEOUT,
+                flush=False,
+            )
             self.assertAlmostEqual(ups_telemetry.batteryCharge, 100.0)
 
     async def test_alerts_event(self):
@@ -311,8 +320,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 "builtins.open", unittest.mock.mock_open()
             ) as mock_file:
                 mock_file.side_effect = IOError("Disk full")
-                await self.assert_next_summary_state(salobj.State.ENABLED)
-                await self.assert_next_summary_state(salobj.State.FAULT)
+                await self.assert_next_summary_state(
+                    salobj.State.ENABLED, timeout=STD_TIMEOUT
+                )
+                await self.assert_next_summary_state(
+                    salobj.State.FAULT, timeout=STD_TIMEOUT
+                )
 
     @unittest.expectedFailure
     async def test_data_download_failure(self):
@@ -326,5 +339,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await self.assert_next_summary_state(salobj.State.ENABLED)
-            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.assert_next_summary_state(
+                salobj.State.ENABLED, timeout=STD_TIMEOUT
+            )
+            await self.assert_next_summary_state(
+                salobj.State.FAULT, timeout=STD_TIMEOUT
+            )

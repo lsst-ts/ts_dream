@@ -292,10 +292,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 file_contents = fileobj.getvalue().decode("utf-8")
 
                 file_index = [
-                    "N_cloud_flat_000041_000073.txt",
-                    "W_cloud_science_000019_000056.txt",
-                    "S_calibration_000057_000047.txt",
-                    "B_image_bias_000017_000080.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.206_N_cloud_flat_000041_000073.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.207_W_cloud_science_000019_000056.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.207_S_calibration_000057_000047.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.207_B_image_bias_000017_000080.txt",
                 ]
                 for j, key_ending in enumerate(file_index):
                     if key.endswith(key_ending):

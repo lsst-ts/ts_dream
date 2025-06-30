@@ -26,6 +26,7 @@ import enum
 import io
 import pathlib
 import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Union
 
@@ -694,8 +695,14 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         # Set up an LFA bucket key
         product_type = "" if data_product.type is None else f"_{data_product.type}"
+
+        start_time = datetime.fromtimestamp(data_product.start, tz=timezone.utc)
+        start_time_str = start_time.isoformat(timespec="milliseconds").replace(
+            "+00:00", ""
+        )
+
         other = (
-            f"{data_product.start.tai.isot}_{data_product.server}_"
+            f"{start_time_str}_{data_product.server}_"
             f"{data_product.kind}{product_type}_"
             f"{data_product.seq[0]:06d}_{data_product.seq[-1]:06d}"
         )
@@ -703,7 +710,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             salname=self.salinfo.name,
             salindexname=None,
             generator="dream",
-            date=data_product.start,
+            date=start_time_str,
             other=other,
             suffix=pathlib.Path(data_product.filename).suffix,
         )

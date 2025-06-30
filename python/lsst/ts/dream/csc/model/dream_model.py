@@ -24,11 +24,10 @@ __all__ = ["DataProduct", "DreamModel"]
 import asyncio
 import logging
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Literal, Type, TypeVar
 
-from astropy.time import Time
 from lsst.ts import tcpip, utils
 
 T = TypeVar("T", bound="DataProduct")
@@ -39,8 +38,8 @@ class DataProduct:
     kind: Literal["cloud", "image", "calibration", "lightcurve"]
     type: Literal["dark", "flat", "bias", "science"] | None
     seq: list[int]
-    start: Time
-    end: Time
+    start: float
+    end: float
     server: Literal["N", "E", "S", "W", "C", "B"]
     size: int  # in bytes
     filename: str
@@ -49,15 +48,27 @@ class DataProduct:
     def to_dict(self) -> dict[str, Any]:
         """Convert dataclass to dictionary with time in ISO format."""
         data = asdict(self)
-        data["start"] = self.start.iso
-        data["end"] = self.end.iso
+        start_time = datetime.fromtimestamp(self.start, tz=timezone.utc)
+        data["start"] = start_time.isoformat(timespec="milliseconds").replace(
+            "+00:00", ""
+        )
+        end_time = datetime.fromtimestamp(self.end, tz=timezone.utc)
+        data["end"] = end_time.isoformat(timespec="milliseconds").replace("+00:00", "")
         return data
 
     @classmethod
     def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
         """Build a dataclass object from dictionary with time in ISO format."""
-        data["start"] = Time(datetime.fromisoformat(data["start"]))
-        data["end"] = Time(datetime.fromisoformat(data["end"]))
+        start_time = (
+            datetime.fromisoformat(data["start"])
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+        )
+        data["start"] = utils.tai_from_utc_unix(start_time)
+        end_time = (
+            datetime.fromisoformat(data["end"]).replace(tzinfo=timezone.utc).timestamp()
+        )
+        data["end"] = utils.tai_from_utc_unix(end_time)
         return cls(**data)
 
 

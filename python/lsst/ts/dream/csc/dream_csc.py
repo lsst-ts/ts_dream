@@ -709,9 +709,9 @@ class DreamCsc(salobj.ConfigurableCsc):
                     # First attempt: Save to S3
                     await self.save_to_s3(response, key)
                     return  # Success!
-                except Exception:
+                except Exception as ex:
                     self.log.exception(
-                        f"Could not upload {key} to S3; trying to save to local disk."
+                        f"Could not upload {key} to S3: {ex!r}; trying to save to local disk."
                     )
                     await self.save_to_local_disk(response, key)
 

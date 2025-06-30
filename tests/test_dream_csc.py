@@ -293,7 +293,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(file_contents, f"This is data product {j+1}")
                         break
 
-    @unittest.expectedFailure
     async def test_data_upload_failure(self):
         """Test that the CSC enters FAULT state if the data upload fails."""
         logging.info("test_data_upload_failure")
@@ -303,6 +302,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
+            await self.remote.cmd_setLogLevel.set_start(level=40)
+            self.remote.evt_logMessage.flush()
+
             with unittest.mock.patch.object(
                 self.csc.s3bucket,
                 "upload",
@@ -311,10 +313,17 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 "builtins.open", unittest.mock.mock_open()
             ) as mock_file:
                 mock_file.side_effect = IOError("Disk full")
-                await self.assert_next_summary_state(salobj.State.ENABLED)
-                await self.assert_next_summary_state(salobj.State.FAULT)
+                for _ in range(4):
+                    log_message = await self.remote.evt_logMessage.next(
+                        flush=False, timeout=STD_TIMEOUT
+                    )
+                    self.assertTrue("Simulated upload failure" in log_message.message)
 
-    @unittest.expectedFailure
+                    log_message = await self.remote.evt_logMessage.next(
+                        flush=False, timeout=STD_TIMEOUT
+                    )
+                    self.assertTrue("Upload data product failed" in log_message.message)
+
     async def test_data_download_failure(self):
         """Test that the CSC enters FAULT state if the data upload fails."""
         logging.info("test_data_upload_failure")
@@ -326,5 +335,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await self.assert_next_summary_state(salobj.State.ENABLED)
-            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.remote.cmd_setLogLevel.set_start(level=40)
+
+            for i in range(10):
+                log_message = await self.remote.evt_logMessage.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
+                if log_message.level == 40:
+                    break
+            else:
+                self.assertTrue(False)
+            self.assertTrue("Upload data product failed" in log_message.message)

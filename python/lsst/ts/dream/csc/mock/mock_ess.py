@@ -29,7 +29,7 @@ from lsst.ts import salobj
 class MockWeather(salobj.BaseCsc):
     """A very limited fake weather CSC
 
-    It emits tel_airflow and evt_precipitation.
+    It emits tel_airflow, tel_relativeHumidity and evt_precipitation.
 
     Parameters
     ----------
@@ -81,6 +81,12 @@ class MockWeather(salobj.BaseCsc):
 
     async def telemetry_loop(self) -> None:
         while True:
+            await self.tel_relativeHumidity.set_write(
+                sensorName="",
+                timestamp=0,
+                relativeHumidityItem=50,
+                location="",
+            )
             await self.tel_airFlow.set_write(
                 sensorName="",
                 timestamp=0,

@@ -715,6 +715,11 @@ class DreamCsc(salobj.ConfigurableCsc):
             suffix=pathlib.Path(data_product.filename).suffix,
         )
 
+        if self.s3bucket.exists(key):
+            self.log.info(
+                f"Skipping {key} because it already exists on S3. sha256={data_product.sha256}"
+            )
+
         # Download the object with HTTP
         server = data_product.server
         if server not in self.config.data_product_host:

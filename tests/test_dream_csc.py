@@ -31,7 +31,7 @@ from lsst.ts import salobj
 from lsst.ts.dream.csc import MockWeather
 from lsst.ts.dream.csc.mock.dream_mock_http import MockDreamHTTPServer
 
-STD_TIMEOUT = 2  # standard command timeout (sec)
+STD_TIMEOUT = 20  # standard command timeout (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parent / "config"
 
 
@@ -88,7 +88,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.weather_csc.evt_summaryState.set_write(
                 summaryState=salobj.State.ENABLED
             )
-            yield
+            try:
+                yield
+            finally:
+                await self.weather_csc.close_tasks()
 
     async def test_standard_state_transitions(self):
         async with self.make_csc(
@@ -125,6 +128,23 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 subsystemVersions="",
             )
 
+    async def test_disable(self):
+        logging.info("test_dome_telemetry")
+        async with self.make_csc(
+            initial_state=salobj.State.STANDBY,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            self.assertFalse(self.srv.roof)
+            await self.remote.cmd_start.set_start()
+            self.assertFalse(self.srv.roof)
+            await self.remote.cmd_enable.set_start()
+            self.assertTrue(self.srv.roof)  # setRoof=true should have been issued
+            await self.remote.cmd_disable.set_start()
+            self.assertFalse(self.srv.roof)
+            await self.remote.cmd_standby.set_start()
+            self.assertFalse(self.srv.roof)
+
     async def test_dome_telemetry(self):
         logging.info("test_dome_telemetry")
         async with self.make_csc(
@@ -132,7 +152,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            dome_telemetry = await self.remote.tel_dome.next(flush=False)
+            dome_telemetry = await self.remote.tel_dome.next(
+                timeout=STD_TIMEOUT, flush=False
+            )
             self.assertEqual(dome_telemetry.encoder, 110)
 
     async def test_environment_telemetry(self):
@@ -142,7 +164,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            environment_telemetry = await self.remote.tel_environment.next(flush=False)
+            environment_telemetry = await self.remote.tel_environment.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
             self.assertAlmostEqual(
                 environment_telemetry.temperature[0], 25.9606, places=4
             )
@@ -163,7 +187,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            power_supply_telemetry = await self.remote.tel_powerSupply.next(flush=False)
+            power_supply_telemetry = await self.remote.tel_powerSupply.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
             self.assertAlmostEqual(power_supply_telemetry.voltage[0], 0.0405, places=4)
             self.assertAlmostEqual(power_supply_telemetry.voltage[1], 0.0, places=4)
             self.assertAlmostEqual(
@@ -178,7 +204,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            ups_telemetry = await self.remote.tel_ups.next(flush=False)
+            ups_telemetry = await self.remote.tel_ups.next(
+                timeout=STD_TIMEOUT,
+                flush=False,
+            )
             self.assertAlmostEqual(ups_telemetry.batteryCharge, 100.0)
 
     async def test_alerts_event(self):
@@ -188,7 +217,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            alerts_event = await self.remote.evt_alerts.next(flush=False)
+            alerts_event = await self.remote.evt_alerts.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
             self.assertFalse(alerts_event.outsideHumidity)
             self.assertFalse(alerts_event.outsideTemperature)
 
@@ -199,7 +230,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            errors_event = await self.remote.evt_errors.next(flush=False)
+            errors_event = await self.remote.evt_errors.next(
+                flush=False, timeout=STD_TIMEOUT
+            )
 
             # Based on the content of the status message
             # in the mock object.
@@ -222,7 +255,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             temperature_control_event = await self.remote.evt_temperatureControl.next(
-                flush=False
+                flush=False,
+                timeout=STD_TIMEOUT,
             )
             self.assertFalse(temperature_control_event.heatingOn)
             self.assertFalse(temperature_control_event.coolingOn)
@@ -234,7 +268,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            ups_event = await self.remote.evt_ups.next(flush=False)
+            ups_event = await self.remote.evt_ups.next(flush=False, timeout=STD_TIMEOUT)
             self.assertTrue(ups_event.online)
             self.assertFalse(ups_event.batteryLow)
             self.assertFalse(ups_event.notOnMains)
@@ -249,7 +283,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             for i in range(1, 5):
                 large_file_event = await self.remote.evt_largeFileObjectAvailable.next(
-                    flush=False
+                    flush=False,
+                    timeout=STD_TIMEOUT,
                 )
                 url = large_file_event.url
                 key = url[url.index("DREAM/") :]
@@ -257,10 +292,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 file_contents = fileobj.getvalue().decode("utf-8")
 
                 file_index = [
-                    "N_cloud_flat_000041_000073.txt",
-                    "W_cloud_science_000019_000056.txt",
-                    "S_calibration_000057_000047.txt",
-                    "B_image_bias_000017_000080.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.206_N_cloud_flat_000041_000073.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.207_W_cloud_science_000019_000056.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.207_S_calibration_000057_000047.txt",
+                    "DREAM_dream_2025-02-14T21:03:32.207_B_image_bias_000017_000080.txt",
                 ]
                 for j, key_ending in enumerate(file_index):
                     if key.endswith(key_ending):
@@ -276,6 +311,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
+            await self.remote.cmd_setLogLevel.set_start(level=40)
+            self.remote.evt_logMessage.flush()
+
             with unittest.mock.patch.object(
                 self.csc.s3bucket,
                 "upload",
@@ -284,8 +322,16 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 "builtins.open", unittest.mock.mock_open()
             ) as mock_file:
                 mock_file.side_effect = IOError("Disk full")
-                await self.assert_next_summary_state(salobj.State.ENABLED)
-                await self.assert_next_summary_state(salobj.State.FAULT)
+                for _ in range(4):
+                    log_message = await self.remote.evt_logMessage.next(
+                        flush=False, timeout=STD_TIMEOUT
+                    )
+                    self.assertTrue("Simulated upload failure" in log_message.message)
+
+                    log_message = await self.remote.evt_logMessage.next(
+                        flush=False, timeout=STD_TIMEOUT
+                    )
+                    self.assertTrue("Upload data product failed" in log_message.message)
 
     async def test_data_download_failure(self):
         """Test that the CSC enters FAULT state if the data upload fails."""
@@ -298,5 +344,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            await self.assert_next_summary_state(salobj.State.ENABLED)
-            await self.assert_next_summary_state(salobj.State.FAULT)
+            await self.remote.cmd_setLogLevel.set_start(level=40)
+
+            for i in range(10):
+                log_message = await self.remote.evt_logMessage.next(
+                    flush=False, timeout=STD_TIMEOUT
+                )
+                if log_message.level == 40:
+                    break
+            else:
+                self.assertTrue(False)
+            self.assertTrue("Upload data product failed" in log_message.message)

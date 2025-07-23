@@ -715,7 +715,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             suffix=pathlib.Path(data_product.filename).suffix,
         )
 
-        if self.s3bucket.exists(key):
+        if await self.s3bucket.exists(key):
             self.log.info(
                 f"Skipping {key} because it already exists on S3. sha256={data_product.sha256}"
             )

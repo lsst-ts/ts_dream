@@ -42,6 +42,8 @@ logging.basicConfig(
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+
         self.http_server = MockDreamHTTPServer(port=5001)
         await self.http_server.start()
 
@@ -59,6 +61,8 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.writer.wait_closed()
         await self.srv.exit()
         await self.http_server.stop()
+
+        await super().asyncTearDown()
 
     def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
         return dream_csc.DreamCsc(

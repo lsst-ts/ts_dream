@@ -28,7 +28,7 @@ CONFIG_SCHEMA = yaml.safe_load(
     $schema: http://json-schema.org/draft-07/schema#
     $id: https://github.com/lsst-ts/ts_dream/blob/master/python/lsst/ts/dream/csc/config_schema.py
     # title must end with one or more spaces followed by the schema version, which must begin with "v"
-    title: DREAM v6
+    title: DREAM v7
     description: Schema for DREAM configuration files
     type: object
     properties:
@@ -104,6 +104,27 @@ CONFIG_SCHEMA = yaml.safe_load(
           If true, the CSC should not save data products from DREAM that have
           a file path starting with "/tmpdata/".
         type: boolean
+      weather_limits:
+        description: Flags to enable or disable individual weather checks
+        type: object
+        properties:
+          use_wind:
+            description: Whether to use wind speed in the weather decision
+            type: boolean
+            default: true
+          use_humidity:
+            description: Whether to use humidity in the weather decision
+            type: boolean
+            default: true
+          use_precipitation:
+            description: Whether to use precipitation (rain/snow) in the weather decision
+            type: boolean
+            default: false
+        required:
+          - use_wind
+          - use_humidity
+          - use_precipitation
+        additionalProperties: false
     required:
       - host
       - port
@@ -117,6 +138,7 @@ CONFIG_SCHEMA = yaml.safe_load(
       - data_product_path
       - run_data_product_loop
       - skip_tmpdata_products
+      - weather_limits
     additionalProperties: false
     """
 )

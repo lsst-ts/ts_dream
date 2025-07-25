@@ -16,3 +16,7 @@ data_product_host:
 data_product_path: /tmp
 run_data_product_loop: true
 skip_tmpdata_products: false
+weather_limits:
+  use_wind: true
+  use_humidity: true
+  use_precipitation: false

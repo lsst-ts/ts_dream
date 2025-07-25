@@ -55,6 +55,7 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.model.disconnect()
         await self.srv.exit()
+        await super().asyncTearDown()
 
     async def validate_dream_model_func(self, func, **kwargs):
         await func(**kwargs)

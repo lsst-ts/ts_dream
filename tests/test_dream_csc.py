@@ -21,6 +21,7 @@
 
 #  type: ignore
 
+import asyncio
 import contextlib
 import logging
 import pathlib
@@ -64,12 +65,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
 
         await super().asyncTearDown()
 
-    def basic_make_csc(self, initial_state, config_dir, simulation_mode, **kwargs):
+    def basic_make_csc(
+        self, initial_state, config_dir, simulation_mode, override, **kwargs
+    ):
         return dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
             mock_port=self.mock_port,
+            override=override,
         )
 
     @contextlib.asynccontextmanager
@@ -359,3 +363,30 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             else:
                 self.assertTrue(False)
             self.assertTrue("Upload data product failed" in log_message.message)
+
+    async def test_use_precipitation(self):
+        """Test for closure if use_precipitation=true in the config."""
+        logging.info("test_use_precipitation")
+
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            override="use_precipitation.yaml",
+            simulation_mode=1,
+        ):
+            self.weather_csc.raining = True
+            await asyncio.sleep(STD_TIMEOUT)  # Wait for event loop startup
+            self.assertTrue(self.srv.weather is False)
+
+    async def test_dont_use_precipitation(self):
+        """Test for closure if use_precipitation=true in the config."""
+        logging.info("test_dont_use_precipitation")
+
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            self.weather_csc.raining = True
+            await asyncio.sleep(STD_TIMEOUT)  # Wait for event loop startup
+            self.assertTrue(self.srv.weather is True)

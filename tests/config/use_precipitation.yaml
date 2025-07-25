@@ -1,0 +1,4 @@
+weather_limits:
+  use_wind: true
+  use_humidity: true
+  use_precipitation: true

@@ -24,6 +24,7 @@ __all__ = ["DreamCsc", "run_dream"]
 import asyncio
 import enum
 import io
+import logging
 import pathlib
 import time
 from datetime import datetime, timezone
@@ -77,6 +78,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         initial_state: salobj.State = salobj.State.STANDBY,
         simulation_mode: int = 0,
         mock_port: int | None = None,
+        override: str = "",
     ) -> None:
         self.config: SimpleNamespace | None = None
         self._config_dir = config_dir
@@ -96,6 +98,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             config_dir=config_dir,
             initial_state=initial_state,
             simulation_mode=simulation_mode,
+            override=override,
         )
 
         self.model: DreamModel | None = None
@@ -401,6 +404,11 @@ class DreamCsc(salobj.ConfigurableCsc):
             domain=self.domain, name="ESS", index=self.config.ess_index
         ) as ess_remote:
             self.weather_ok_flag = None
+            last_weather_ok_flag = None
+
+            use_wind = self.config.weather_limits["use_wind"]
+            use_humidity = self.config.weather_limits["use_humidity"]
+            use_precipitation = self.config.weather_limits["use_precipitation"]
 
             # Wait for the CSC to establish its connection.
             await asyncio.sleep(BASE_RECONNECT_WAIT)
@@ -412,52 +420,69 @@ class DreamCsc(salobj.ConfigurableCsc):
                     # Get weather data.
                     current_time = utils.current_tai()
                     weather_ok_flag = True
-                    air_flow = await ess_remote.tel_airFlow.aget(
-                        timeout=SAL_TIMEOUT,
-                    )
-                    air_flow_age = (
-                        1_000_000
-                        if air_flow is None
-                        else current_time - air_flow.private_sndStamp
-                    )
-                    if air_flow is None or air_flow.speed > 25 or air_flow_age > 300:
-                        weather_ok_flag = False
 
-                    precipitation = await ess_remote.evt_precipitation.aget(
-                        timeout=SAL_TIMEOUT
-                    )
-                    if precipitation is None or (
-                        precipitation.raining or precipitation.snowing
-                    ):
-                        weather_ok_flag = False
+                    if use_wind:
+                        air_flow = await ess_remote.tel_airFlow.aget(
+                            timeout=SAL_TIMEOUT,
+                        )
+                        air_flow_age = (
+                            1_000_000
+                            if air_flow is None
+                            else current_time - air_flow.private_sndStamp
+                        )
+                        if (
+                            air_flow is None
+                            or air_flow.speed > 25
+                            or air_flow_age > 300
+                        ):
+                            weather_ok_flag = False
 
-                    humidity = await ess_remote.tel_relativeHumidity.aget(
-                        timeout=SAL_TIMEOUT
-                    )
-                    humidity_age = (
-                        1_000_000
-                        if humidity is None
-                        else current_time - humidity.private_sndStamp
-                    )
+                    if use_precipitation:
+                        precipitation = await ess_remote.evt_precipitation.aget(
+                            timeout=SAL_TIMEOUT
+                        )
+                        if precipitation is None or (
+                            precipitation.raining or precipitation.snowing
+                        ):
+                            weather_ok_flag = False
+
+                    if use_humidity:
+                        humidity = await ess_remote.tel_relativeHumidity.aget(
+                            timeout=SAL_TIMEOUT
+                        )
+                        humidity_age = (
+                            1_000_000
+                            if humidity is None
+                            else current_time - humidity.private_sndStamp
+                        )
+                        if (
+                            humidity is None
+                            or humidity.relativeHumidityItem >= 90
+                            or humidity_age > 300
+                        ):
+                            weather_ok_flag = False
+
                     if (
-                        humidity is None
-                        or humidity.relativeHumidityItem >= 90
-                        or humidity_age > 300
-                    ):
-                        weather_ok_flag = False
+                        weather_ok_flag != last_weather_ok_flag
+                    ) or self.log.isEnabledFor(logging.DEBUG):
+                        weather_report = f"Weather report:  {weather_ok_flag=}"
+                        if use_wind:
+                            weather_report += f"\n{air_flow.speed=}\n{air_flow_age=}"
+                        if use_humidity:
+                            weather_report += (
+                                f"\n{humidity.relativeHumidityItem=}\n{humidity_age=}"
+                            )
+                        if use_precipitation:
+                            weather_report += (
+                                f"\n{precipitation.raining=}\n{precipitation.snowing=}"
+                            )
 
-                    self.log.debug(
-                        f"""
-                        Weather report:
-                        {air_flow.speed=}
-                        {air_flow_age=}
-                        {humidity.relativeHumidityItem=}
-                        {humidity_age=}
-                        {precipitation.raining=}
-                        {precipitation.snowing=}
-                        {weather_ok_flag=}
-                        """
-                    )
+                    if weather_ok_flag != last_weather_ok_flag:
+                        self.log.info(weather_report)
+                    elif self.log.isEnabledFor(logging.DEBUG):
+                        self.log.debug(weather_report)
+
+                    last_weather_ok_flag = weather_ok_flag
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
                     await asyncio.sleep(CSC_RESET_SLEEP_TIME)  # A little extra safety

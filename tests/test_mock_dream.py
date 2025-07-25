@@ -60,6 +60,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
             self.writer.close()
             await self.writer.wait_closed()
         await self.srv.exit()
+        await super().asyncTearDown()
 
     async def read(self):
         """Read a string from the reader and unmarshal it

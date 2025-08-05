@@ -60,7 +60,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
 
-        self.http_server = MockDreamHTTPServer(port=5001)
+        self.http_server = MockDreamHTTPServer(host="127.0.0.1", port=0)
         await self.http_server.start()
 
         self.log = logging.getLogger("test")
@@ -96,13 +96,27 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(
         self, initial_state, config_dir, simulation_mode, override="", **kwargs
     ):
-        return dream_csc.DreamCsc(
+        csc = dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
             mock_port=self.mock_port,
             override=override,
         )
+        original_configure = csc.configure
+
+        # To avoid errors from the HTTP port already being in use, we'll assign
+        # the port dynamically. To accomodate this, we also need to dynamically
+        # change the config YAML.
+        async def configure_with_mock_http(config):
+            host_port = f"127.0.0.1:{self.http_server.port}"
+            config.data_product_host = {
+                key: host_port for key in config.data_product_host
+            }
+            await original_configure(config)
+
+        csc.configure = configure_with_mock_http
+        return csc
 
     async def test_standard_state_transitions(self):
         async with self.make_csc(

@@ -705,6 +705,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             f"{start_time_str}_{data_product.server}_"
             f"{data_product.kind}{product_type}_"
             f"{data_product.seq[0]:06d}_{data_product.seq[-1]:06d}"
+            f"_r{data_product.revision}"
         )
         key = self.s3bucket.make_key(
             salname=self.salinfo.name,

@@ -40,6 +40,7 @@ class DataProduct:
     seq: list[int]
     start: float
     end: float
+    revision: int
     server: Literal["N", "E", "S", "W", "C", "B"]
     size: int  # in bytes
     filename: str
@@ -69,6 +70,10 @@ class DataProduct:
             datetime.fromisoformat(data["end"]).replace(tzinfo=timezone.utc).timestamp()
         )
         data["end"] = utils.tai_from_utc_unix(end_time)
+
+        if "revision" not in data:
+            data["revision"] = 0
+
         return cls(**data)
 
 

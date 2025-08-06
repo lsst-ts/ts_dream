@@ -24,6 +24,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 import pathlib
 import unittest
 
@@ -42,6 +43,8 @@ logging.basicConfig(
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
+    _randomize_topic_subname = True
+
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
 
@@ -66,8 +69,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         await super().asyncTearDown()
 
     def basic_make_csc(
-        self, initial_state, config_dir, simulation_mode, override, **kwargs
+        self, initial_state, config_dir, simulation_mode, override="", **kwargs
     ):
+        logging.error(os.environ["LSST_TOPIC_SUBNAME"])
         return dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,

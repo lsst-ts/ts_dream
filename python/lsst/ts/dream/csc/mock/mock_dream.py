@@ -221,6 +221,7 @@ class MockDream(tcpip.OneClientServer):
         self.log: logging.Logger = (
             logging.getLogger(type(self).__name__) if log is None else log
         )
+        self.weather: bool | None = None
 
         # Dict of command: function to look up which funtion to call when a
         # command arrives.
@@ -413,6 +414,7 @@ class MockDream(tcpip.OneClientServer):
                 "result": "error",
                 "reason": "data required",
             }
+        self.weather = data
         return dict()
 
     async def set_roof(self, data: bool | None) -> dict:

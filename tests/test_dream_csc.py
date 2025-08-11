@@ -22,9 +22,7 @@
 #  type: ignore
 
 import asyncio
-import contextlib
 import logging
-import os
 import pathlib
 import unittest
 
@@ -43,8 +41,6 @@ logging.basicConfig(
 
 
 class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
-    _randomize_topic_subname = True
-
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
 
@@ -55,10 +51,17 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             host="0.0.0.0", port=0, log=logging.getLogger("foobar")
         )
         await self.srv.start_task
+
+        self.weather_csc = MockWeather(initial_state=salobj.State.ENABLED)
+        await self.weather_csc.start_task
+
         self.mock_port = self.srv.port
         self.writer = None
 
     async def asyncTearDown(self):
+        await self.weather_csc.cancel_telemetry_task()
+        await self.weather_csc.close()
+
         await self.srv.disconnect()
         if self.writer:
             self.writer.close()
@@ -66,12 +69,13 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         await self.srv.exit()
         await self.http_server.stop()
 
+        await asyncio.sleep(5)  # Allow time for cleanup
         await super().asyncTearDown()
+        await asyncio.sleep(5)  # Allow time for cleanup
 
     def basic_make_csc(
         self, initial_state, config_dir, simulation_mode, override="", **kwargs
     ):
-        logging.error(os.environ["LSST_TOPIC_SUBNAME"])
         return dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
@@ -79,31 +83,6 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             mock_port=self.mock_port,
             override=override,
         )
-
-    @contextlib.asynccontextmanager
-    async def make_csc(
-        self,
-        initial_state,
-        config_dir=TEST_CONFIG_DIR,
-        override="",
-        simulation_mode=0,
-        log_level=None,
-    ):
-        async with super().make_csc(
-            initial_state=initial_state,
-            config_dir=config_dir,
-            override=override,
-            simulation_mode=simulation_mode,
-            log_level=log_level,
-        ), MockWeather(initial_state=salobj.State.ENABLED) as self.weather_csc:
-            await self.weather_csc.start_task
-            await self.weather_csc.evt_summaryState.set_write(
-                summaryState=salobj.State.ENABLED
-            )
-            try:
-                yield
-            finally:
-                await self.weather_csc.close_tasks()
 
     async def test_standard_state_transitions(self):
         async with self.make_csc(

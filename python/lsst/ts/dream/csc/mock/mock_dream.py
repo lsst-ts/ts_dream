@@ -32,14 +32,14 @@ from lsst.ts import tcpip
 _dream_status = """
 {
   "status": {
-    "target_observing_mode": "IDLE",
+    "target_observing_mode": "AUTO",
     "actual_observing_mode": "IDLE",
     "target_dome_state": "STOP",
-    "actual_dome_state": "STOP",
+    "actual_dome_state": "OPEN",
     "target_heater_state": "OFF",
-    "actual_heater_state": "OFF",
+    "actual_heater_state": "AUTO",
     "target_peltier_state": "OFF",
-    "actual_peltier_state": "OFF",
+    "actual_peltier_state": "HEAT",
     "temp_hum": {
       "electronics_top": {
         "temperature": 25.76363921680424,
@@ -79,7 +79,7 @@ _dream_status = """
       "North Server": true,
       "East Server": true,
       "South Server": true,
-      "West Server": true,
+      "West Server": false,
       "South Camera": true,
       "West Camera": true
     },
@@ -110,17 +110,19 @@ _dream_status = """
       "dome_closed": "not hit"
     },
     "electronics": {
-      "motor_relay": "off",
-      "motor_dir": "closing",
-      "peltier_relay": "off",
+      "motor_relay": "on",
+      "motor_dir": "opening",
+      "peltier_relay": "on",
       "peltier_dir": "heating",
-      "window_heaters": "off"
+      "window_heaters": "on"
     },
     "dome_position": 110,
     "errors": [
       "Dome should be closed but it is not",
       "Temp hum sensor not reachable",
-      "PDU 2 not reachable"
+      "PDU 2 not reachable",
+      "extra error 1",
+      "extra error 2"
     ],
     "warnings": [
       "North camera not connected",
@@ -137,7 +139,62 @@ _dream_status = """
       "Dome opening blocked by sun alt",
       "UPS is simulated"
     ],
-    "cameras": {}
+    "cameras": {
+      "E": {
+        "last_heartbeat": "2025-09-25T14:24:30.341+00:00",
+        "camera_mode": "IDLE",
+        "ccd_temp": 3.14,
+        "num_blanks": 101,
+        "num_darks": 43,
+        "num_bias": 41,
+        "num_flats": 38,
+        "num_science": 0,
+        "num_missed": 0,
+        "last_image_seq": 62955554,
+        "last_image_triggertime": "2025-09-25T09:52:42.496+00:00",
+        "last_image_timing_latency": 0.003159,
+        "last_image_usb_latency": 0.000259,
+        "last_image_artificial_latency": 5.7220458984375e-06,
+        "last_image_type": "BIAS",
+        "last_image_pixel_median": 1004
+      },
+      "N": {
+        "last_heartbeat": "2025-09-25T14:24:31.078+00:00",
+        "camera_mode": "IDLE",
+        "ccd_temp": 42,
+        "num_blanks": 101,
+        "num_darks": 43,
+        "num_bias": 41,
+        "num_flats": 39,
+        "num_science": 0,
+        "num_missed": 0,
+        "last_image_seq": 62955554,
+        "last_image_triggertime": "2025-09-25T09:52:42.496+00:00",
+        "last_image_timing_latency": 0.003164,
+        "last_image_usb_latency": 0.000252,
+        "last_image_artificial_latency": 6.4373016357421875e-06,
+        "last_image_type": "SCIENCE",
+        "last_image_pixel_median": 1015
+      },
+      "S": {
+        "last_heartbeat": "2025-09-25T14:24:31.078+00:00",
+        "camera_mode": "IDLE",
+        "ccd_temp": 1729,
+        "num_blanks": 123,
+        "num_darks": 43,
+        "num_bias": 41,
+        "num_flats": 39,
+        "num_science": 0,
+        "num_missed": 0,
+        "last_image_seq": 62955554,
+        "last_image_triggertime": "2025-09-25T09:52:42.496+00:00",
+        "last_image_timing_latency": 0.003183,
+        "last_image_usb_latency": 0.000239,
+        "last_image_artificial_latency": 6.9141387939453125e-06,
+        "last_image_type": "BIAS",
+        "last_image_pixel_median": 993
+      }
+    }
   }
 }
 """

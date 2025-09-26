@@ -73,7 +73,7 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_status(self):
         status = await self.model.get_status()
-        self.assertEqual(status["target_observing_mode"], "IDLE")
+        self.assertEqual(status["target_observing_mode"], "AUTO")
 
     async def test_get_products(self):
         products = await self.model.get_new_data_products()

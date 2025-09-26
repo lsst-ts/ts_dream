@@ -51,6 +51,8 @@ class MockWeather(salobj.BaseCsc):
         self.telemetry_interval = 3  # seconds
         self.telemetry_task: asyncio.Future = asyncio.Future()
         self.raining = False
+        self.windspeed = 1.23
+        self.humidity = 50
 
     async def cancel_telemetry_task(self) -> None:
         self.telemetry_task.cancel()
@@ -76,7 +78,7 @@ class MockWeather(salobj.BaseCsc):
             await self.tel_relativeHumidity.set_write(
                 sensorName="",
                 timestamp=0,
-                relativeHumidityItem=50,
+                relativeHumidityItem=self.humidity,
                 location="",
             )
             await self.tel_airFlow.set_write(
@@ -84,7 +86,7 @@ class MockWeather(salobj.BaseCsc):
                 timestamp=0,
                 direction=0,
                 directionStdDev=0,
-                speed=1.23,
+                speed=self.windspeed,
                 speedStdDev=0,
                 maxSpeed=0,
                 location="",

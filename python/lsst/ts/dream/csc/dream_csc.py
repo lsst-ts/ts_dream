@@ -29,20 +29,26 @@ import pathlib
 import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import Any, Union
+from typing import Any
 
 import httpx
+import yaml
+from jsonschema import Draft202012Validator, ValidationError
 from lsst.ts import salobj, utils
+from lsst.ts.xml.enums.DREAM import Weather
 
 from . import CONFIG_SCHEMA, __version__
 from .mock import MockDream
 from .model import DataProduct, DreamModel
+from .status_topics_builder import StatusTopicsBuilder
 
 SAL_TIMEOUT = 120.0
 CSC_RESET_SLEEP_TIME = 180.0
 RECONNECT_TIMEOUT = 180.0
 MAXIMUM_RECONNECT_WAIT = 60.0
 BASE_RECONNECT_WAIT = 10.0
+
+DREAM_STATUS_SCHEMA_FILE = pathlib.Path(__file__).parent / "dream_status_schema.yaml"
 
 
 class ErrorCode(enum.IntEnum):
@@ -101,12 +107,22 @@ class DreamCsc(salobj.ConfigurableCsc):
             override=override,
         )
 
+        # Load the status schema
+        self.logged_schema_violation = (
+            False  # Only log schema violation one time per CSC run.
+        )
+        with DREAM_STATUS_SCHEMA_FILE.open() as f:
+            dream_status_schema = yaml.safe_load(f)
+        self.dream_status_validator = Draft202012Validator(dream_status_schema)
+
         self.model: DreamModel | None = None
 
         # LFA related configuration:
         self.s3bucket: salobj.AsyncS3Bucket | None = None  # Set by `connect`.
         self.s3bucket_name: str | None = None  # Set by `configure`.
         self.s3instance: str | None = None  # Set by `connect`.
+
+        self.topics_builder: StatusTopicsBuilder | None = None  # Set by `configure`
 
         self.health_monitor_loop_task = utils.make_done_future()
 
@@ -152,6 +168,9 @@ class DreamCsc(salobj.ConfigurableCsc):
         if self.model is None:
             self.model = DreamModel(config=self.config, log=self.log)
         await self.model.connect(host=host, port=port)
+
+        await self.evt_setRoof.set_write(roof=False)
+        await self.model.close_roof()
 
         self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
@@ -204,6 +223,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             raise RuntimeError("No model connected.")
 
         await self.model.open_roof()
+        await self.evt_setRoof.set_write(roof=True)
         await super().end_enable(id_data)
 
     async def begin_standby(self, id_data: salobj.BaseMsgType) -> None:
@@ -235,6 +255,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             raise RuntimeError("No model connected.")
 
         await self.model.close_roof()
+        await self.evt_setRoof.set_write(roof=False)
         await super().begin_disable(id_data)
 
     async def disconnect(self, close_roof: bool = True) -> None:
@@ -263,6 +284,7 @@ class DreamCsc(salobj.ConfigurableCsc):
             if close_roof:
                 try:
                     await self.model.close_roof()
+                    await self.evt_setRoof.set_write(roof=False)
                 except Exception:
                     self.log.exception("While disconnecting, failed to close the roof.")
             await self.model.disconnect()
@@ -277,6 +299,10 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.config = config
         self.s3bucket_name = salobj.AsyncS3Bucket.make_bucket_name(
             s3instance=config.s3instance,
+        )
+        self.topics_builder = StatusTopicsBuilder(
+            log=self.log,
+            battery_low_threshold=config.battery_low_threshold,
         )
 
     async def health_monitor(self) -> None:
@@ -431,6 +457,12 @@ class DreamCsc(salobj.ConfigurableCsc):
                     current_time = utils.current_tai()
                     weather_ok_flag = True
 
+                    alerts_data = {
+                        "outsideHumidity": False,
+                        "outsideTemperature": False,
+                    }
+                    weatherFlags = 0
+
                     if use_wind:
                         air_flow = await ess_remote.tel_airFlow.aget(
                             timeout=SAL_TIMEOUT,
@@ -446,6 +478,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                             or air_flow_age > 300
                         ):
                             weather_ok_flag = False
+                            weatherFlags |= Weather.WeatherBad | Weather.WindBad
 
                     if use_precipitation:
                         precipitation = await ess_remote.evt_precipitation.aget(
@@ -455,6 +488,9 @@ class DreamCsc(salobj.ConfigurableCsc):
                             precipitation.raining or precipitation.snowing
                         ):
                             weather_ok_flag = False
+                            weatherFlags |= (
+                                Weather.WeatherBad | Weather.PrecipitationBad
+                            )
 
                     if use_humidity:
                         humidity = await ess_remote.tel_relativeHumidity.aget(
@@ -471,6 +507,8 @@ class DreamCsc(salobj.ConfigurableCsc):
                             or humidity_age > 300
                         ):
                             weather_ok_flag = False
+                            alerts_data["outsideHumidity"] = True
+                            weatherFlags |= Weather.WeatherBad | Weather.HumidityBad
 
                     if (
                         weather_ok_flag != last_weather_ok_flag
@@ -486,6 +524,9 @@ class DreamCsc(salobj.ConfigurableCsc):
                             weather_report += (
                                 f"\n{precipitation.raining=}\n{precipitation.snowing=}"
                             )
+
+                    await self.evt_alerts.set_write(**alerts_data)
+                    await self.evt_weather.set_write(weatherFlags=weatherFlags)
 
                     if weather_ok_flag != last_weather_ok_flag:
                         self.log.info(weather_report)
@@ -514,6 +555,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     # Send weather flag
                     if self.model is not None:
                         await self.model.set_weather_ok(weather_ok_flag)
+                        await self.evt_setWeather.set_write(weather=weather_ok_flag)
                         self.weather_ok_flag = weather_ok_flag
                     else:
                         self.log.info(
@@ -528,8 +570,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     # Get status information and emit telemetry.
                     try:
                         status_data = await self.model.get_status()
-                        await self.send_telemetry(status_data)
-                        await self.send_events(status_data)
+                        await self.send_status_topics(status_data)
 
                     except KeyError:
                         self.log.exception("Status had unexpected format!")
@@ -545,159 +586,35 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.info("Weather loop ending because of asyncio cancel.")
                     raise
 
-    async def send_telemetry(self, status_data: dict[str, Any]) -> None:
-        """Sends telemetry from the CSC based on status information.
+    async def send_status_topics(self, dream_status: dict[str, Any]) -> None:
+        """Validate and publish DREAM status data to the corresponding topics.
 
-        Extracts relevant data from the status structure returned
-        from DREAM by the getStatus command and emits SAL telemetry.
-
-        Parameters
-        ----------
-        status_data : `dict[str, Any]`
-            The status structure returned by DREAM's getStatus
-            command.
-        """
-        if not self.config:
-            raise RuntimeError("Not yet configured")
-
-        try:
-            environment_key_names = [
-                "camera_bay",
-                "electronics_box",
-                "rack_top",
-            ]
-
-            # Dome telemetry...
-            dome_encoder = status_data["dome_position"]
-            await self.tel_dome.set_write(encoder=dome_encoder)
-
-            # Environment telemetry...
-            environment_temperature = [
-                status_data["temp_hum"][key_name]["temperature"]
-                for key_name in environment_key_names
-            ]
-            environment_humidity = [
-                status_data["temp_hum"][key_name]["humidity"]
-                for key_name in environment_key_names
-            ]
-            await self.tel_environment.set_write(
-                temperature=environment_temperature,
-                humidity=environment_humidity,
-            )
-
-            # Power supply telemetry...
-            power_supply_voltage = [
-                status_data["psu_status"]["voltage_feedback"],
-                status_data["psu_status"]["voltage_setpoint"],
-            ]
-            power_supply_current = [
-                status_data["psu_status"]["current_feedback"],
-                status_data["psu_status"]["current_setpoint"],
-            ]
-            await self.tel_powerSupply.set_write(
-                voltage=power_supply_voltage,
-                current=power_supply_current,
-            )
-
-            # UPS telemetry...
-            ups_battery_charge = status_data["ups_status"]["battery_charge"]
-            await self.tel_ups.set_write(batteryCharge=ups_battery_charge)
-        except KeyError:
-            self.log.exception("Telemetry status from DREAM had unexpected format!")
-            raise
-
-    async def send_events(self, status_data: dict[str, Any]) -> None:
-        """Emits events for the CSC based on status information.
-
-        Extracts relevant data from the status structure returned
-        from DREAM by the getStatus command and emits SAL events.
+        This method takes a `dream_status` dictionary received from the DREAM
+        TCP interface, validates it against the expected schema, and then
+        transforms it into topic data using the configured `topics_builder`.
+        Each resulting topic is then written to Kafka.
 
         Parameters
         ----------
-        status_data : `dict[str, Any]`
-            The status structure returned by DREAM's getStatus
-            command.
-
+        dream_status : dict[str, Any]
+            The status dictionary returned by DREAM, expected to match the
+            schema defined in ``dream_status_validator``.
         """
-        if not self.config:
+        if self.topics_builder is None:
             raise RuntimeError("Not yet configured")
 
-        try:
-            # Event `alerts`:
-            # The DREAM team did not specify temperature or humidity limits
-            # for DREAM operation, only wind and precipitation. So these are
-            # always False.
-            await self.evt_alerts.set_write(
-                outsideHumidity=False,
-                outsideTemperature=False,
-            )
+        # Validate the dream_status against the expected schema.
+        if not self.logged_schema_violation:
+            try:
+                self.dream_status_validator.validate(dream_status)
+            except ValidationError:
+                self.log.exception("getStatus response from DREAM failed validation.")
+                self.logged_schema_violation = True
 
-            # Event `errors`:
-            pdu1_error = "PDU 1 not reachable"
-            pdu2_error = "PDU 2 not reachable"
-            temphum_error = "Temp hum sensor not reachable"
-            camera_bay_temp_error = "Camera bay temperature too high"
-            camera_bay_hum_error = "Humidity in camera bay too high"
-            electronics_humidity_error = "Humidity in electronics box > limit"
-            dome_humidity_error = "Humidity under dome > limit"
-            dome_humidity_error_2 = "Humidty under dome > limit"
-
-            error_flag_map = {
-                "domeHumidity": [dome_humidity_error, dome_humidity_error_2],
-                "enclosureTemperature": [camera_bay_temp_error],
-                "enclosureHumidity": [camera_bay_hum_error],
-                "electronicsBoxCommunication": [electronics_humidity_error],
-                "temperatureSensorCommunication": [temphum_error],
-                "domePositionUnknown": [],  # There seems to be no way of getting
-                "daqCommunication": [],  # these errors from DREAM.
-                "pduCommunication": [pdu1_error, pdu2_error],
-            }
-
-            error_dict: dict[str, Union[bool, list[bool]]] = {
-                flag: any(
-                    error_string in status_data["errors"]
-                    for error_string in error_string_list
-                )
-                for flag, error_string_list in error_flag_map.items()
-            }
-            # DREAM does not provide separate information about each
-            # temperature sensor, so we'll just duplicate the result
-            # three times to provide the CSC with what it expects.
-            error_dict["temperatureSensorCommunication"] = [
-                bool(error_dict["temperatureSensorCommunication"])
-            ] * 3
-            await self.evt_errors.set_write(**error_dict)
-
-            # Event `temperatureControl`:
-            peltier_relay = status_data["electronics"]["peltier_relay"] == "on"
-            peltier_direction = status_data["electronics"]["peltier_dir"]
-            heating_on = peltier_relay and (peltier_direction == "heating")
-            cooling_on = peltier_relay and (peltier_direction == "cooling")
-            await self.evt_temperatureControl.set_write(
-                heatingOn=heating_on,
-                coolingOn=cooling_on,
-            )
-
-            # Event `ups`:
-            ups_online = status_data["ups_status"]["ups_status"] == "ONLINE"
-            ups_battery_low = (
-                status_data["ups_status"]["battery_charge"]
-                < self.config.battery_low_threshold
-            )
-            ups_not_on_mains = "UPS is on battery" in status_data["warnings"]
-            ups_communication_error = (
-                "UPS not reachable or not responding" in status_data["errors"]
-            )
-            await self.evt_ups.set_write(
-                online=ups_online,
-                batteryLow=ups_battery_low,
-                notOnMains=ups_not_on_mains,
-                communicationError=ups_communication_error,
-            )
-
-        except KeyError:
-            self.log.exception("Events status from DREAM had unexpected format!")
-            raise
+        status_topics = self.topics_builder(dream_status)
+        for topic_name, topic_data in status_topics:
+            topic = getattr(self, topic_name)
+            await topic.set_write(**topic_data)
 
     async def upload_data_product(self, data_product: DataProduct) -> None:
         """Retrieve a data file from DREAM and uploads it to LFA.

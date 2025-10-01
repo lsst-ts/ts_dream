@@ -141,7 +141,9 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         if self.simulation_mode == 1:
             if self.mock_port is None:
-                self.mock = MockDream(host="127.0.0.1", port=0, log=self.log)
+                self.mock = MockDream(
+                    host="127.0.0.1", port=0, log=self.log, send_products=False
+                )
                 await self.mock.start_task
                 port = self.mock.port
                 self.log.info(f"Mock started on port {port}")
@@ -422,9 +424,16 @@ class DreamCsc(salobj.ConfigurableCsc):
                     weather_ok_flag = True
 
                     if use_wind:
-                        air_flow = await ess_remote.tel_airFlow.aget(
-                            timeout=SAL_TIMEOUT,
-                        )
+                        try:
+                            air_flow = await ess_remote.tel_airFlow.aget(
+                                timeout=SAL_TIMEOUT,
+                            )
+                        except TimeoutError:
+                            air_flow = None
+                            self.log.error(
+                                "Failed to read windspeed from weather station"
+                            )
+
                         air_flow_age = (
                             1_000_000
                             if air_flow is None
@@ -438,18 +447,32 @@ class DreamCsc(salobj.ConfigurableCsc):
                             weather_ok_flag = False
 
                     if use_precipitation:
-                        precipitation = await ess_remote.evt_precipitation.aget(
-                            timeout=SAL_TIMEOUT
-                        )
+                        try:
+                            precipitation = await ess_remote.evt_precipitation.aget(
+                                timeout=SAL_TIMEOUT
+                            )
+                        except TimeoutError:
+                            precipitation = None
+                            self.log.error(
+                                "Failed to read precipitation from weather station"
+                            )
+
                         if precipitation is None or (
                             precipitation.raining or precipitation.snowing
                         ):
                             weather_ok_flag = False
 
                     if use_humidity:
-                        humidity = await ess_remote.tel_relativeHumidity.aget(
-                            timeout=SAL_TIMEOUT
-                        )
+                        try:
+                            humidity = await ess_remote.tel_relativeHumidity.aget(
+                                timeout=SAL_TIMEOUT
+                            )
+                        except TimeoutError:
+                            precipitation = None
+                            self.log.error(
+                                "Failed to read humidity from weather station"
+                            )
+
                         humidity_age = (
                             1_000_000
                             if humidity is None

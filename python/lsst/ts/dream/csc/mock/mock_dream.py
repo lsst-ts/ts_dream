@@ -262,6 +262,9 @@ class MockDream(tcpip.OneClientServer):
         If `None` then bind to all network interfaces.
     port: `int`
         IP port for this server. If 0 then use a random port.
+    send_products: `bool`
+        If true, the mocked DREAM will publish data products
+        for download.
     family: `socket.AddressFamily`, optional
         Address family for the socket connection, or socket.AF_UNSPEC.
     """
@@ -270,6 +273,7 @@ class MockDream(tcpip.OneClientServer):
         self,
         host: typing.Optional[str],
         port: int,
+        send_products: bool = True,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         log: logging.Logger | None = None,
     ) -> None:
@@ -279,6 +283,7 @@ class MockDream(tcpip.OneClientServer):
             logging.getLogger(type(self).__name__) if log is None else log
         )
         self.weather: bool | None = None
+        self.send_products = send_products
 
         # Dict of command: function to look up which funtion to call when a
         # command arrives.
@@ -441,7 +446,9 @@ class MockDream(tcpip.OneClientServer):
         self.log.info("get_new_data_products called.")
         return {
             "msg_type": "list",
-            "new_products": json.loads(_dream_new_data_products),
+            "new_products": (
+                json.loads(_dream_new_data_products) if self.send_products else []
+            ),
         }
 
     async def set_weather(self, data: bool | None) -> dict:

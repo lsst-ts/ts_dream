@@ -47,8 +47,9 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         self.http_server = MockDreamHTTPServer(port=5001)
         await self.http_server.start()
 
+        self.log = logging.getLogger("test")
         self.srv = dream_csc.mock.MockDream(
-            host="0.0.0.0", port=0, log=logging.getLogger("foobar")
+            host="0.0.0.0", port=0, log=logging.getLogger("mock")
         )
         await self.srv.start_task
 
@@ -59,19 +60,22 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         self.writer = None
 
     async def asyncTearDown(self):
-        await self.weather_csc.cancel_telemetry_task()
-        await self.weather_csc.close()
+        try:
+            await self.weather_csc.cancel_telemetry_task()
+            await self.weather_csc.close()
 
-        await self.srv.disconnect()
-        if self.writer:
-            self.writer.close()
-            await self.writer.wait_closed()
-        await self.srv.exit()
-        await self.http_server.stop()
+            await self.srv.disconnect()
+            if self.writer:
+                self.writer.close()
+                await self.writer.wait_closed()
+            await self.srv.exit()
+            await self.http_server.stop()
 
-        await asyncio.sleep(5)  # Allow time for cleanup
-        await super().asyncTearDown()
-        await asyncio.sleep(5)  # Allow time for cleanup
+        except Exception:
+            self.log.exception("exception in asyncTearDown")
+
+        finally:
+            await super().asyncTearDown()
 
     def basic_make_csc(
         self, initial_state, config_dir, simulation_mode, override="", **kwargs
@@ -337,15 +341,19 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         ):
             await self.remote.cmd_setLogLevel.set_start(level=40)
 
-            for i in range(10):
+            for i in range(100):
                 log_message = await self.remote.evt_logMessage.next(
                     flush=False, timeout=STD_TIMEOUT
                 )
+                self.log.debug(f"log message from CSC: {log_message.message}")
                 if log_message.level == 40:
                     break
             else:
-                self.assertTrue(False)
-            self.assertTrue("Upload data product failed" in log_message.message)
+                self.assertTrue(False, "Failed to obtain an ERROR message")
+            self.assertTrue(
+                "Upload data product failed" in log_message.message,
+                f"Unexpected log message: {log_message.message}",
+            )
 
     async def test_use_precipitation(self):
         """Test for closure if use_precipitation=true in the config."""

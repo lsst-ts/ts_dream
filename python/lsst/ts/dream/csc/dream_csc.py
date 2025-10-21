@@ -217,14 +217,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         id_data : `salobj.BaseMsgType`
             Command ID and data
         """
-        await self.cmd_disable.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
-        self.health_monitor_loop_task.cancel()
-        try:
-            await self.health_monitor_loop_task
-        except asyncio.CancelledError:
-            pass
-
-        await self.disconnect()
+        await self.cmd_standby.ack_in_progress(id_data, timeout=SAL_TIMEOUT)
+        await self.stop_health_monitor_and_disconnect()
         await super().begin_standby(id_data)
 
     async def begin_disable(self, id_data: salobj.BaseMsgType) -> None:
@@ -348,12 +342,28 @@ class DreamCsc(salobj.ConfigurableCsc):
     def get_config_pkg() -> str:
         return "ts_config_ocs"
 
+    async def close_tasks(self) -> None:
+        await self.stop_health_monitor_and_disconnect()
+        await super().close_tasks()
+
+    async def handle_summary_state(self) -> None:
+        if self.summary_state == salobj.State.FAULT:
+            try:
+                await self.stop_health_monitor_and_disconnect()
+            except Exception:
+                # Never mind, we gave it a try.
+                self.exception("Failed to disconnect after FAULT")
+
     async def do_pause(self, data: salobj.BaseMsgType) -> None:
+        await self.stop_health_monitor_and_disconnect()
+
+    async def stop_health_monitor_and_disconnect(self) -> None:
         self.health_monitor_loop_task.cancel()
         try:
             await self.health_monitor_loop_task
         except asyncio.CancelledError:
             pass
+
         await self.disconnect()
 
     async def do_resume(self, data: salobj.BaseMsgType) -> None:

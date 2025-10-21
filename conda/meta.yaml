@@ -21,7 +21,7 @@ test:
     - tests
     - pyproject.toml
   commands:
-    - pytest -vv --log-cli-level=DEBUG --capture=no
+    - pytest
 
 requirements:
   host:

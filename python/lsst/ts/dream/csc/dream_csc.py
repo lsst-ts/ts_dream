@@ -271,6 +271,15 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         self.log.info("Disconnecting")
 
+        # Close roof if needed.
+        if self.model is not None:
+            if close_roof:
+                try:
+                    await self.model.close_roof()
+                    await self.evt_setRoof.set_write(roof=False)
+                except Exception:
+                    self.log.exception("While disconnecting, failed to close the roof.")
+
         # End the monitor loops.
         self.weather_and_status_loop_task.cancel()
         self.data_product_loop_task.cancel()
@@ -280,13 +289,8 @@ class DreamCsc(salobj.ConfigurableCsc):
             return_exceptions=True,
         )
 
+        # Close connection.
         if self.model is not None:
-            if close_roof:
-                try:
-                    await self.model.close_roof()
-                    await self.evt_setRoof.set_write(roof=False)
-                except Exception:
-                    self.log.exception("While disconnecting, failed to close the roof.")
             await self.model.disconnect()
         self.model = None
         if self.mock:

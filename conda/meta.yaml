@@ -21,7 +21,7 @@ test:
     - tests
     - pyproject.toml
   commands:
-    - pytest
+    - pytest -vv --capture=no
 
 requirements:
   host:

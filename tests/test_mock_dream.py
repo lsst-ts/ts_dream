@@ -157,7 +157,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_status(self):
         data = await self.verify_command(action="getStatus")
-        self.assertEqual(data["status"]["target_observing_mode"], "IDLE")
+        self.assertEqual(data["status"]["target_observing_mode"], "AUTO")
 
     async def test_get_products(self):
         data = await self.verify_command(action="getNewDataProducts")

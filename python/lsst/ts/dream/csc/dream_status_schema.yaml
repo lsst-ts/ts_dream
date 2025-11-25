@@ -1,0 +1,452 @@
+---
+$schema: "https://json-schema.org/draft/2020-12/schema"
+title: "SystemStatus"
+type: object
+properties:
+  target_observing_mode:
+    $ref: "#/$defs/CameraServerMode"
+  actual_observing_mode:
+    $ref: "#/$defs/CameraServerMode"
+  target_dome_state:
+    $ref: "#/$defs/DomeTargetState"
+  actual_dome_state:
+    $ref: "#/$defs/DomeState"
+  target_heater_state:
+    $ref: "#/$defs/HeaterState"
+  actual_heater_state:
+    $ref: "#/$defs/HeaterState"
+  target_peltier_state:
+    $ref: "#/$defs/PeltierState"
+  actual_peltier_state:
+    $ref: "#/$defs/PeltierState"
+  temp_hum:
+    type: object
+    properties:
+      electronics_top:
+        $ref: "#/$defs/tempHumReading"
+      camera_bay:
+        $ref: "#/$defs/tempHumReading"
+      electronics_box:
+        $ref: "#/$defs/tempHumReading"
+      rack_top:
+        $ref: "#/$defs/tempHumReading"
+      rack_bottom:
+        $ref: "#/$defs/tempHumReading"
+      dream_inlet:
+        $ref: "#/$defs/tempHumReading"
+    required:
+      - electronics_top
+      - camera_bay
+      - electronics_box
+      - rack_top
+      - rack_bottom
+      - dream_inlet
+    additionalProperties: false
+  pdu_status:
+    type: object
+    properties:
+      "Switch":
+        type: boolean
+      "USB hub":
+        type: boolean
+      "PSU 1":
+        type: boolean
+      "PSU 2":
+        type: boolean
+      "Central Camera":
+        type: boolean
+      "North Camera":
+        type: boolean
+      "East Camera":
+        type: boolean
+      "South Camera":
+        type: boolean
+      "West Camera":
+        type: boolean
+      "Command Server":
+        type: boolean
+      "Central Server":
+        type: boolean
+      "North Server":
+        type: boolean
+      "East Server":
+        type: boolean
+      "South Server":
+        type: boolean
+      "West Server":
+        type: boolean
+    required:
+      - "Switch"
+      - "USB hub"
+      - "PSU 1"
+      - "PSU 2"
+      - "Central Camera"
+      - "North Camera"
+      - "East Camera"
+      - "South Camera"
+      - "West Camera"
+      - "Command Server"
+      - "Central Server"
+      - "North Server"
+      - "East Server"
+      - "South Server"
+      - "West Server"
+    additionalProperties: false
+  ups_status:
+    type: object
+    properties:
+      ups_status:
+        type: string
+        enum:
+          - ONLINE
+          - BATTERY
+      battery_charge:
+        type: number
+      battery_temperature:
+        type: number
+      battery_voltage:
+        type: number
+      battery_remaining:
+        type: number
+      battery_needs_replacing:
+        type: boolean
+      input_last_error:
+        type: string
+      output_load:
+        type: number
+      output_current:
+        type: number
+      last_online:
+        type: number  # Unix timestamp
+    required:
+      - ups_status
+      - battery_charge
+      - battery_temperature
+      - battery_voltage
+      - battery_remaining
+      - battery_needs_replacing
+      - input_last_error
+      - output_load
+      - output_current
+    additionalProperties: false
+  psu_status:
+    type: object
+    properties:
+      temp_error:
+        type: boolean
+      input_error:
+        type: boolean
+      voltage_feedback:
+        type: number
+      current_feedback:
+        type: number
+      voltage_setpoint:
+        type: number
+      current_setpoint:
+        type: number
+    required:
+      - temp_error
+      - input_error
+      - voltage_feedback
+      - current_feedback
+      - voltage_setpoint
+      - current_setpoint
+    additionalProperties: false
+  limit_switches:
+    type: object
+    properties:
+      front_door:
+        type: string
+        enum:
+          - hit
+          - not hit
+      back_door:
+        type: string
+        enum:
+          - hit
+          - not hit
+      dome_open:
+        type: string
+        enum:
+          - hit
+          - not hit
+      dome_closed:
+        type: string
+        enum:
+          - hit
+          - not hit
+    required:
+      - front_door
+      - back_door
+      - dome_open
+      - dome_closed
+    additionalProperties: false
+  electronics:
+    type: object
+    properties:
+      motor_relay:
+        type: string
+        enum:
+          - "on"
+          - "off"
+      motor_dir:
+        type: string
+        enum:
+          - closing
+          - opening
+      peltier_relay:
+        type: string
+        enum:
+          - "on"
+          - "off"
+      peltier_dir:
+        type: string
+        enum:
+          - cooling
+          - heating
+      window_heaters:
+        type: string
+        enum:
+          - "on"
+          - "off"
+    required:
+      - motor_relay
+      - motor_dir
+      - peltier_relay
+      - peltier_dir
+      - window_heaters
+    additionalProperties: false
+  dome_position:
+    type: number
+  errors:
+    type: array
+    items:
+      $ref: "#/$defs/DreamError"
+  warnings:
+    type: array
+    items:
+      $ref: "#/$defs/DreamWarning"
+  cameras:
+    properties:
+      E:
+        $ref: "#/$defs/Camera"
+      W:
+        $ref: "#/$defs/Camera"
+      N:
+        $ref: "#/$defs/Camera"
+      C:
+        $ref: "#/$defs/Camera"
+      S:
+        $ref: "#/$defs/Camera"
+    additionalProperties: false
+required:
+  - target_observing_mode
+  - actual_observing_mode
+  - target_dome_state
+  - actual_dome_state
+  - target_heater_state
+  - actual_heater_state
+  - target_peltier_state
+  - actual_peltier_state
+  - temp_hum
+  - pdu_status
+  - ups_status
+  - psu_status
+  - limit_switches
+  - electronics
+  - dome_position
+  - errors
+  - warnings
+  - cameras
+additionalProperties: false
+
+$defs:
+  tempHumReading:
+    type: object
+    properties:
+      temperature:
+        type: number
+      humidity:
+        type: number
+    required:
+      - temperature
+      - humidity
+    additionalProperties: false
+
+  DreamWarning:
+    type: string
+    enum:
+      # highlevel station related flags:
+      - "Power saving mode activated"
+      - "UPS is on battery"
+      # dome decision insights
+      - "Dome opening blocked by NO-GO"
+      - "Dome opening blocked by sun alt"
+      - "Dome opening blocked by temp/hum"
+      - "Dome opening blocked by UPS error"
+      - "Dome opening blocked by timer"
+      - "User stopped dome movement"
+      - "User forced dome open"
+      - "Dome opening blocked by backdoor"
+      # rubin client related flags:
+      - "Rubin client not connected"
+      - "More than 1 client on rubin socket"
+      - "Rubin client update too old"
+      - "Rubin-provided weather flag too old"
+      - "Bad weather flag set by Rubin"
+      - "NO-GO for dome open set by Rubin"
+      # script client
+      - "There is an active script client"
+      # environment warning
+      - "Dream inlet humidity high"
+      - "Dream inlet temperature low"
+      # warnings about missing cameras:
+      - "North camera not connected"
+      - "South camera not connected"
+      - "East camera not connected"
+      - "West camera not connected"
+      - "Center camera not connected"
+      # simulator warnings
+      - "Dome movements are simulated"
+      - "LEDs are simulated"
+      - "UPS is simulated"
+      - "PDU is simulated"
+      - "Temp/humidity sensors are simulated"
+      - "Sun angle is simulated"
+
+  DreamError:
+    type: string
+    enum:
+      # unexpected events
+      - "Both open and closed are pushed"
+      - "Dome should be closed but it is not"
+      # things that could happen but need to be fixed if not intentional
+      - "Backdoor is open"
+      - "Door is open"
+      # missing/unreachable hardware
+      - "UPS not reachable or not responding"
+      - "PDU 1 not reachable"
+      - "PDU 2 not reachable"
+      - "Temp hum sensor not reachable"
+      - "PSU reports a problem"
+      - "UPS battery needs replacing"
+      # environment errors
+      - "Camera bay temperature too high"
+      - "Humidity in camera bay too high"
+      - "Humidity in electronics box > limit"
+      - "Humidty under dome > limit"
+
+  CameraServerMode:
+    type: string
+    enum:
+      - AUTO
+      - IDLE
+      - STANDBY
+      - BLANKS
+      - BIAS
+      - FLATS
+      - DARKS
+      - SCIENCE
+      - SHUTDOWN
+
+  DomeTargetState:
+    type: string
+    enum:
+      - AUTO
+      - OPEN
+      - CLOSED
+      - STOP
+      - FORCEOPEN
+
+  DomeState:
+    type: string
+    enum:
+      - OPEN
+      - CLOSED
+      - OPENING
+      - CLOSING
+      - STOP
+
+  HeaterState:
+    type: string
+    enum:
+      - AUTO
+      - "ON"
+      - "OFF"
+      - UNKNOWN
+
+  PeltierState:
+    type: string
+    enum:
+      - AUTO
+      - COOL
+      - HEAT
+      - "OFF"
+      - UNKNOWN
+
+  Camera:
+    type: object
+    properties:
+      last_heartbeat:
+        type: string  # ISOT timestamp with time zone
+      camera_mode:
+        anyOf:
+          - $ref: "#/$defs/CameraServerMode"
+          - type: "null"
+      ccd_temp:
+        type: [number, "null"]
+      num_blanks:
+        type: [integer, "null"]
+        minimum: 0
+      num_darks:
+        type: [integer, "null"]
+        minimum: 0
+      num_bias:
+        type: [integer, "null"]
+        minimum: 0
+      num_flats:
+        type: [integer, "null"]
+        minimum: 0
+      num_science:
+        type: [integer, "null"]
+        minimum: 0
+      num_missed:
+        type: [integer, "null"]
+        minimum: 0
+      last_image_seq:
+        type: [integer, "null"]
+        minimum: 0
+      last_image_triggertime:
+        type:
+          - string  # ISOT timestamp with time zone
+          - "null"
+      last_image_timing_latency:
+        type: [number, "null"]
+      last_image_usb_latency:
+        type: [number, "null"]
+      last_image_artificial_latency:
+        type: [number, "null"]
+      last_image_type:
+        anyOf:
+          - $ref: "#/$defs/CameraServerMode"
+          - type: "null"
+      last_image_pixel_median:
+        type: [number, "null"]
+    required:
+      - last_heartbeat
+      - camera_mode
+      - ccd_temp
+      - num_blanks
+      - num_darks
+      - num_bias
+      - num_flats
+      - num_science
+      - num_missed
+      - last_image_seq
+      - last_image_triggertime
+      - last_image_timing_latency
+      - last_image_usb_latency
+      - last_image_artificial_latency
+      - last_image_type
+      - last_image_pixel_median
+    additionalProperties: false

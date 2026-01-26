@@ -55,6 +55,7 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.model.disconnect()
         await self.srv.exit()
+        await super().asyncTearDown()
 
     async def validate_dream_model_func(self, func, **kwargs):
         await func(**kwargs)
@@ -72,7 +73,7 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def test_get_status(self):
         status = await self.model.get_status()
-        self.assertEqual(status["target_observing_mode"], "IDLE")
+        self.assertEqual(status["target_observing_mode"], "AUTO")
 
     async def test_get_products(self):
         products = await self.model.get_new_data_products()

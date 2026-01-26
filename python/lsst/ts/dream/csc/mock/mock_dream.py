@@ -32,14 +32,14 @@ from lsst.ts import tcpip
 _dream_status = """
 {
   "status": {
-    "target_observing_mode": "IDLE",
+    "target_observing_mode": "AUTO",
     "actual_observing_mode": "IDLE",
     "target_dome_state": "STOP",
-    "actual_dome_state": "STOP",
+    "actual_dome_state": "OPEN",
     "target_heater_state": "OFF",
-    "actual_heater_state": "OFF",
+    "actual_heater_state": "AUTO",
     "target_peltier_state": "OFF",
-    "actual_peltier_state": "OFF",
+    "actual_peltier_state": "HEAT",
     "temp_hum": {
       "electronics_top": {
         "temperature": 25.76363921680424,
@@ -79,7 +79,7 @@ _dream_status = """
       "North Server": true,
       "East Server": true,
       "South Server": true,
-      "West Server": true,
+      "West Server": false,
       "South Camera": true,
       "West Camera": true
     },
@@ -110,17 +110,19 @@ _dream_status = """
       "dome_closed": "not hit"
     },
     "electronics": {
-      "motor_relay": "off",
-      "motor_dir": "closing",
-      "peltier_relay": "off",
+      "motor_relay": "on",
+      "motor_dir": "opening",
+      "peltier_relay": "on",
       "peltier_dir": "heating",
-      "window_heaters": "off"
+      "window_heaters": "on"
     },
     "dome_position": 110,
     "errors": [
       "Dome should be closed but it is not",
       "Temp hum sensor not reachable",
-      "PDU 2 not reachable"
+      "PDU 2 not reachable",
+      "extra error 1",
+      "extra error 2"
     ],
     "warnings": [
       "North camera not connected",
@@ -137,7 +139,62 @@ _dream_status = """
       "Dome opening blocked by sun alt",
       "UPS is simulated"
     ],
-    "cameras": {}
+    "cameras": {
+      "E": {
+        "last_heartbeat": "2025-09-25T14:24:30.341+00:00",
+        "camera_mode": "IDLE",
+        "ccd_temp": 3.14,
+        "num_blanks": 101,
+        "num_darks": 43,
+        "num_bias": 41,
+        "num_flats": 38,
+        "num_science": 0,
+        "num_missed": 0,
+        "last_image_seq": 62955554,
+        "last_image_triggertime": "2025-09-25T09:52:42.496+00:00",
+        "last_image_timing_latency": 0.003159,
+        "last_image_usb_latency": 0.000259,
+        "last_image_artificial_latency": 5.7220458984375e-06,
+        "last_image_type": "BIAS",
+        "last_image_pixel_median": 1004
+      },
+      "N": {
+        "last_heartbeat": "2025-09-25T14:24:31.078+00:00",
+        "camera_mode": "IDLE",
+        "ccd_temp": 42,
+        "num_blanks": 101,
+        "num_darks": 43,
+        "num_bias": 41,
+        "num_flats": 39,
+        "num_science": 0,
+        "num_missed": 0,
+        "last_image_seq": 62955554,
+        "last_image_triggertime": "2025-09-25T09:52:42.496+00:00",
+        "last_image_timing_latency": 0.003164,
+        "last_image_usb_latency": 0.000252,
+        "last_image_artificial_latency": 6.4373016357421875e-06,
+        "last_image_type": "SCIENCE",
+        "last_image_pixel_median": 1015
+      },
+      "S": {
+        "last_heartbeat": "2025-09-25T14:24:31.078+00:00",
+        "camera_mode": "IDLE",
+        "ccd_temp": 1729,
+        "num_blanks": 123,
+        "num_darks": 43,
+        "num_bias": 41,
+        "num_flats": 39,
+        "num_science": 0,
+        "num_missed": 0,
+        "last_image_seq": 62955554,
+        "last_image_triggertime": "2025-09-25T09:52:42.496+00:00",
+        "last_image_timing_latency": 0.003183,
+        "last_image_usb_latency": 0.000239,
+        "last_image_artificial_latency": 6.9141387939453125e-06,
+        "last_image_type": "BIAS",
+        "last_image_pixel_median": 993
+      }
+    }
   }
 }
 """
@@ -205,6 +262,9 @@ class MockDream(tcpip.OneClientServer):
         If `None` then bind to all network interfaces.
     port: `int`
         IP port for this server. If 0 then use a random port.
+    send_products: `bool`
+        If true, the mocked DREAM will publish data products
+        for download.
     family: `socket.AddressFamily`, optional
         Address family for the socket connection, or socket.AF_UNSPEC.
     """
@@ -213,6 +273,7 @@ class MockDream(tcpip.OneClientServer):
         self,
         host: typing.Optional[str],
         port: int,
+        send_products: bool = True,
         family: socket.AddressFamily = socket.AF_UNSPEC,
         log: logging.Logger | None = None,
     ) -> None:
@@ -221,6 +282,8 @@ class MockDream(tcpip.OneClientServer):
         self.log: logging.Logger = (
             logging.getLogger(type(self).__name__) if log is None else log
         )
+        self.weather: bool | None = None
+        self.send_products = send_products
 
         # Dict of command: function to look up which funtion to call when a
         # command arrives.
@@ -383,7 +446,9 @@ class MockDream(tcpip.OneClientServer):
         self.log.info("get_new_data_products called.")
         return {
             "msg_type": "list",
-            "new_products": json.loads(_dream_new_data_products),
+            "new_products": (
+                json.loads(_dream_new_data_products) if self.send_products else []
+            ),
         }
 
     async def set_weather(self, data: bool | None) -> dict:
@@ -413,6 +478,7 @@ class MockDream(tcpip.OneClientServer):
                 "result": "error",
                 "reason": "data required",
             }
+        self.weather = data
         return dict()
 
     async def set_roof(self, data: bool | None) -> dict:

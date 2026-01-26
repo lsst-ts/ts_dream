@@ -1,1 +1,0 @@
-Fixed problems that were causing faults in BTS.

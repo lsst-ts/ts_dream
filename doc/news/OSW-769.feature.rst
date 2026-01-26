@@ -1,1 +1,0 @@
- Allow disabling of wind, precipitation, humidity, and disable precipitation by default.

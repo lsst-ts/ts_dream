@@ -1,1 +1,0 @@
-Added telemetry associated with XML cycle 42.

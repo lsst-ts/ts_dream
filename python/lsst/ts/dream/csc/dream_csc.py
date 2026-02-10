@@ -42,6 +42,7 @@ from .mock import MockDream
 from .model import DataProduct, DreamModel
 from .status_topics_builder import StatusTopicsBuilder
 
+STD_TIMEOUT = 120.0
 SAL_TIMEOUT = 120.0
 CSC_RESET_SLEEP_TIME = 180.0
 RECONNECT_TIMEOUT = 180.0
@@ -49,6 +50,41 @@ MAXIMUM_RECONNECT_WAIT = 60.0
 BASE_RECONNECT_WAIT = 10.0
 
 DREAM_STATUS_SCHEMA_FILE = pathlib.Path(__file__).parent / "dream_status_schema.yaml"
+
+
+async def _sleep_unless_cancelled(event: asyncio.Event, duration: float) -> bool:
+    """
+    Sleep for up to a specified duration unless a cancellation event is set.
+
+    This coroutine waits for the given ``event`` to be set, but no longer than
+    ``duration`` seconds. If the event is set before the timeout expires, the
+    function returns ``True`` immediately. If the timeout expires first, the
+    function returns ``False``.
+
+    Parameters
+    ----------
+    event : asyncio.Event
+        Event used to signal cancellation or early termination. If this event
+        is set during the wait, the sleep is interrupted.
+    duration : float
+        Maximum time, in seconds, to wait for the event before timing out.
+
+    Returns
+    -------
+    bool
+        ``True`` if the event was set before the timeout elapsed (caller should
+        stop or exit), ``False`` if the timeout elapsed without the event being
+        set (caller should continue).
+    """
+
+    try:
+        await asyncio.wait_for(
+            event.wait(),
+            timeout=duration,
+        )
+        return True  # event was set; caller should end
+    except asyncio.TimeoutError:
+        return False  # interval expired; caller should continue
 
 
 class ErrorCode(enum.IntEnum):
@@ -96,6 +132,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         self.weather_and_status_loop_task = utils.make_done_future()
         self.data_product_loop_task = utils.make_done_future()
         self.weather_ok_flag: bool | None = None
+        self.stop_monitor_loops_event = asyncio.Event()
+        self.stop_health_monitor_event = asyncio.Event()
 
         super().__init__(
             name="DREAM",
@@ -174,6 +212,8 @@ class DreamCsc(salobj.ConfigurableCsc):
         await self.evt_setRoof.set_write(roof=False)
         await self.model.close_roof()
 
+        self.stop_monitor_loops_event.clear()
+        self.stop_health_monitor_event.clear()
         self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
         )
@@ -283,8 +323,28 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.exception("While disconnecting, failed to close the roof.")
 
         # End the monitor loops.
-        self.weather_and_status_loop_task.cancel()
-        self.data_product_loop_task.cancel()
+        self.stop_monitor_loops_event.set()
+
+        # Wait for the weather and status loop and cancel if it's too slow.
+        try:
+            await asyncio.wait_for(
+                self.weather_and_status_loop_task, timeout=self.config.poll_interval
+            )
+        except asyncio.TimeoutError:
+            self.weather_and_status_loop_task.cancel()
+        except asyncio.CancelledError:
+            pass  # Can happen if the task was cancelled previously.
+
+        # Next, same thing for the data product loop.
+        try:
+            await asyncio.wait_for(
+                self.data_product_loop_task, timeout=self.config.poll_interval
+            )
+        except asyncio.TimeoutError:
+            self.data_product_loop_task.cancel()
+        except asyncio.CancelledError:
+            pass  # Can happen if the task was cancelled previously.
+
         await asyncio.gather(
             self.weather_and_status_loop_task,
             self.data_product_loop_task,
@@ -319,7 +379,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.config:
             raise RuntimeError("Not yet configured")
 
-        while True:
+        while not self.stop_health_monitor_event.is_set():
             if self.weather_and_status_loop_task.done():
                 if (exc := self.weather_and_status_loop_task.exception()) is not None:
                     self.log.exception(
@@ -334,7 +394,14 @@ class DreamCsc(salobj.ConfigurableCsc):
                 else:
                     self.log.warning("Data product loop health monitor tripped.")
                 break
-            await asyncio.sleep(self.heartbeat_interval)
+
+            if await _sleep_unless_cancelled(
+                self.stop_health_monitor_event, self.heartbeat_interval
+            ):
+                return
+
+        if self.stop_health_monitor_event.is_set():
+            return
 
         # Begin the process of trying to reconnect.
         reconnect_time = time.time()
@@ -356,7 +423,10 @@ class DreamCsc(salobj.ConfigurableCsc):
                     MAXIMUM_RECONNECT_WAIT,
                     BASE_RECONNECT_WAIT * 2 ** (attempt_number - 1),
                 )
-                await asyncio.sleep(sleep_time)
+                if await _sleep_unless_cancelled(
+                    self.stop_health_monitor_event, sleep_time
+                ):
+                    return
 
         self.log.error("Failed to reconnect. Fault!")
         await self.fault(
@@ -390,11 +460,11 @@ class DreamCsc(salobj.ConfigurableCsc):
         await self.stop_health_monitor_and_disconnect()
 
     async def stop_health_monitor_and_disconnect(self) -> None:
-        self.health_monitor_loop_task.cancel()
+        self.stop_health_monitor_event.set()
         try:
-            await self.health_monitor_loop_task
-        except asyncio.CancelledError:
-            pass
+            await asyncio.wait_for(self.health_monitor_loop_task, timeout=STD_TIMEOUT)
+        except asyncio.TimeoutError:
+            self.log.exception("Health monitor did not stop in a timely fashion.")
 
         await self.disconnect()
 
@@ -412,19 +482,25 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.config:
             raise RuntimeError("Not yet configured")
 
-        while self.model is not None and self.model.connected:
+        while (
+            self.model is not None
+            and self.model.connected
+            and not self.stop_monitor_loops_event.is_set()
+        ):
             self.log.debug("Checking for new data products...")
 
-            if self.model is not None:
-                data_products = await self.model.get_new_data_products()
-                for data_product in data_products:
-                    self.log.debug(f"New data product: {data_product.filename}")
-                    try:
-                        await self.upload_data_product(data_product)
-                    except Exception:
-                        self.log.exception("Upload data product failed")
+            data_products = await self.model.get_new_data_products()
+            for data_product in data_products:
+                self.log.debug(f"New data product: {data_product.filename}")
+                try:
+                    await self.upload_data_product(data_product)
+                except Exception:
+                    self.log.exception("Upload data product failed")
 
-            await asyncio.sleep(self.config.poll_interval)
+            if await _sleep_unless_cancelled(
+                self.stop_monitor_loops_event, self.config.poll_interval
+            ):
+                return
 
         if self.model is None:
             self.log.warning("Data product loop terminating: self.model is None")
@@ -453,9 +529,16 @@ class DreamCsc(salobj.ConfigurableCsc):
             use_precipitation = self.config.weather_limits["use_precipitation"]
 
             # Wait for the CSC to establish its connection.
-            await asyncio.sleep(BASE_RECONNECT_WAIT)
+            if await _sleep_unless_cancelled(
+                self.stop_monitor_loops_event, BASE_RECONNECT_WAIT
+            ):
+                return
 
-            while self.model is not None and self.model.connected:
+            while (
+                self.model is not None
+                and self.model.connected
+                and not self.stop_monitor_loops_event.is_set()
+            ):
                 self.log.debug("Checking weather and DREAM status...")
 
                 try:
@@ -563,7 +646,11 @@ class DreamCsc(salobj.ConfigurableCsc):
                     last_weather_ok_flag = weather_ok_flag
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
-                    await asyncio.sleep(CSC_RESET_SLEEP_TIME)  # A little extra safety
+                    # A little extra safety
+                    if await _sleep_unless_cancelled(
+                        self.stop_monitor_loops_event, CSC_RESET_SLEEP_TIME
+                    ):
+                        return
 
                     ess_retries -= 1
                     if ess_retries == 0:
@@ -608,7 +695,10 @@ class DreamCsc(salobj.ConfigurableCsc):
 
                 # Sleep for a bit.
                 try:
-                    await asyncio.sleep(self.config.poll_interval)
+                    if await _sleep_unless_cancelled(
+                        self.stop_monitor_loops_event, self.config.poll_interval
+                    ):
+                        return
                 except asyncio.CancelledError:
                     self.log.info("Weather loop ending because of asyncio cancel.")
                     raise

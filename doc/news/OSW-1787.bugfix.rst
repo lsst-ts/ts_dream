@@ -1,1 +1,0 @@
-Added cooperative task cancellation and avoid cancelling a task within its child.

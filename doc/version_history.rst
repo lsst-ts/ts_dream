@@ -1,3 +1,12 @@
+v0.5.12 (2026-02-10)
+====================
+
+Bug Fixes
+---------
+
+- Added cooperative task cancellation and avoid cancelling a task within its child. (`OSW-1787 <https://rubinobs.atlassian.net//browse/OSW-1787>`_)
+
+
 v0.5.11 (2026-01-26)
 ====================
 

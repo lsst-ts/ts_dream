@@ -1,0 +1,1 @@
+Avoided fault in case of missing weather telemetry by reporting bad weather to DREAM instead.

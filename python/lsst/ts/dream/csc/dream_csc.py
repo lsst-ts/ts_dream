@@ -553,16 +553,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     weatherFlags = 0
 
                     if use_wind:
-                        try:
-                            air_flow = await ess_remote.tel_airFlow.aget(
-                                timeout=SAL_TIMEOUT,
-                            )
-                        except TimeoutError:
-                            air_flow = None
-                            self.log.warning(
-                                "Timed out waiting for windspeed telemetry from the weather station."
-                            )
-
+                        air_flow = ess_remote.tel_airFlow.get()
                         air_flow_age = (
                             1_000_000
                             if air_flow is None
@@ -577,16 +568,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                             weatherFlags |= Weather.WeatherBad | Weather.WindBad
 
                     if use_precipitation:
-                        try:
-                            precipitation = await ess_remote.evt_precipitation.aget(
-                                timeout=SAL_TIMEOUT
-                            )
-                        except TimeoutError:
-                            precipitation = None
-                            self.log.warning(
-                                "Timed out waiting for precipitation telemetry from the weather station."
-                            )
-
+                        precipitation = ess_remote.evt_precipitation.get()
                         if precipitation is None or (
                             precipitation.raining or precipitation.snowing
                         ):
@@ -596,16 +578,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                             )
 
                     if use_humidity:
-                        try:
-                            humidity = await ess_remote.tel_relativeHumidity.aget(
-                                timeout=SAL_TIMEOUT
-                            )
-                        except TimeoutError:
-                            humidity = None
-                            self.log.warning(
-                                "Timed out waiting for humidity telemetry from the weather station."
-                            )
-
+                        humidity = ess_remote.tel_relativeHumidity.get()
                         humidity_age = (
                             1_000_000
                             if humidity is None
@@ -625,15 +598,25 @@ class DreamCsc(salobj.ConfigurableCsc):
                     ) or self.log.isEnabledFor(logging.DEBUG):
                         weather_report = f"Weather report:  {weather_ok_flag=}"
                         if use_wind:
-                            weather_report += f"\n{air_flow.speed=}\n{air_flow_age=}"
+                            if air_flow is None:
+                                weather_report += "\nwind data not available"
+                            else:
+                                weather_report += (
+                                    f"\n{air_flow.speed=:.2f}\n{air_flow_age=:.0f}"
+                                )
                         if use_humidity:
-                            weather_report += (
-                                f"\n{humidity.relativeHumidityItem=}\n{humidity_age=}"
-                            )
+                            if humidity is None:
+                                weather_report += "\nhumidity data not available"
+                            else:
+                                weather_report += (
+                                    f"\n{humidity.relativeHumidityItem=:.0f}"
+                                    f"\n{humidity_age=:.0f}"
+                                )
                         if use_precipitation:
-                            weather_report += (
-                                f"\n{precipitation.raining=}\n{precipitation.snowing=}"
-                            )
+                            if precipitation is None:
+                                weather_report += "\nprecipitation data not available"
+                            else:
+                                weather_report += f"\n{precipitation.raining=}\n{precipitation.snowing=}"
 
                     await self.evt_alerts.set_write(**alerts_data)
                     await self.evt_weather.set_write(weatherFlags=weatherFlags)

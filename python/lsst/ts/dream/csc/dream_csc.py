@@ -454,17 +454,25 @@ class DreamCsc(salobj.ConfigurableCsc):
                 await self.stop_health_monitor_and_disconnect()
             except Exception:
                 # Never mind, we gave it a try.
-                self.exception("Failed to disconnect after FAULT")
+                self.log.exception("Failed to disconnect after FAULT")
 
     async def do_pause(self, data: salobj.BaseMsgType) -> None:
         await self.stop_health_monitor_and_disconnect()
 
     async def stop_health_monitor_and_disconnect(self) -> None:
         self.stop_health_monitor_event.set()
-        try:
-            await asyncio.wait_for(self.health_monitor_loop_task, timeout=STD_TIMEOUT)
-        except asyncio.TimeoutError:
-            self.log.exception("Health monitor did not stop in a timely fashion.")
+
+        # If we are inside the health_monitor_loop_task, we cannot and should
+        # not wait for the task to end. It's no problem to call disconnect
+        # before waiting because disconnect will appropriately wait for the
+        # subtasks.
+        if asyncio.current_task() is not self.health_monitor_loop_task:
+            try:
+                await asyncio.wait_for(
+                    self.health_monitor_loop_task, timeout=STD_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                self.log.exception("Health monitor did not stop in a timely fashion.")
 
         await self.disconnect()
 
@@ -553,40 +561,17 @@ class DreamCsc(salobj.ConfigurableCsc):
                     weatherFlags = 0
 
                     if use_wind:
-                        try:
-                            air_flow = await ess_remote.tel_airFlow.aget(
-                                timeout=SAL_TIMEOUT,
-                            )
-                        except TimeoutError:
-                            air_flow = None
-                            self.log.warning(
-                                "Timed out waiting for windspeed telemetry from the weather station."
-                            )
-
-                        air_flow_age = (
-                            1_000_000
-                            if air_flow is None
-                            else current_time - air_flow.private_sndStamp
-                        )
+                        air_flow = ess_remote.tel_airFlow.get()
                         if (
                             air_flow is None
                             or air_flow.speed > 25
-                            or air_flow_age > 300
+                            or (current_time - air_flow.private_sndStamp) > 300
                         ):
                             weather_ok_flag = False
                             weatherFlags |= Weather.WeatherBad | Weather.WindBad
 
                     if use_precipitation:
-                        try:
-                            precipitation = await ess_remote.evt_precipitation.aget(
-                                timeout=SAL_TIMEOUT
-                            )
-                        except TimeoutError:
-                            precipitation = None
-                            self.log.warning(
-                                "Timed out waiting for precipitation telemetry from the weather station."
-                            )
-
+                        precipitation = ess_remote.evt_precipitation.get()
                         if precipitation is None or (
                             precipitation.raining or precipitation.snowing
                         ):
@@ -596,25 +581,11 @@ class DreamCsc(salobj.ConfigurableCsc):
                             )
 
                     if use_humidity:
-                        try:
-                            humidity = await ess_remote.tel_relativeHumidity.aget(
-                                timeout=SAL_TIMEOUT
-                            )
-                        except TimeoutError:
-                            humidity = None
-                            self.log.warning(
-                                "Timed out waiting for humidity telemetry from the weather station."
-                            )
-
-                        humidity_age = (
-                            1_000_000
-                            if humidity is None
-                            else current_time - humidity.private_sndStamp
-                        )
+                        humidity = ess_remote.tel_relativeHumidity.get()
                         if (
                             humidity is None
                             or humidity.relativeHumidityItem >= 90
-                            or humidity_age > 300
+                            or (current_time - humidity.private_sndStamp) > 300
                         ):
                             weather_ok_flag = False
                             alerts_data["outsideHumidity"] = True
@@ -625,15 +596,26 @@ class DreamCsc(salobj.ConfigurableCsc):
                     ) or self.log.isEnabledFor(logging.DEBUG):
                         weather_report = f"Weather report:  {weather_ok_flag=}"
                         if use_wind:
-                            weather_report += f"\n{air_flow.speed=}\n{air_flow_age=}"
+                            if air_flow is None:
+                                weather_report += "\nwind data not available"
+                            else:
+                                weather_report += (
+                                    f"\n{air_flow.speed=:.2f}"
+                                    f"\n{(current_time - air_flow.private_sndStamp)=:.0f} s"
+                                )
                         if use_humidity:
-                            weather_report += (
-                                f"\n{humidity.relativeHumidityItem=}\n{humidity_age=}"
-                            )
+                            if humidity is None:
+                                weather_report += "\nhumidity data not available"
+                            else:
+                                weather_report += (
+                                    f"\n{humidity.relativeHumidityItem=:.0f}"
+                                    f"\n{(current_time - humidity.private_sndStamp)=:.0f}"
+                                )
                         if use_precipitation:
-                            weather_report += (
-                                f"\n{precipitation.raining=}\n{precipitation.snowing=}"
-                            )
+                            if precipitation is None:
+                                weather_report += "\nprecipitation data not available"
+                            else:
+                                weather_report += f"\n{precipitation.raining=}\n{precipitation.snowing=}"
 
                     await self.evt_alerts.set_write(**alerts_data)
                     await self.evt_weather.set_write(weatherFlags=weatherFlags)

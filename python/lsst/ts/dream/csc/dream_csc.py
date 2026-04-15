@@ -454,17 +454,25 @@ class DreamCsc(salobj.ConfigurableCsc):
                 await self.stop_health_monitor_and_disconnect()
             except Exception:
                 # Never mind, we gave it a try.
-                self.exception("Failed to disconnect after FAULT")
+                self.log.exception("Failed to disconnect after FAULT")
 
     async def do_pause(self, data: salobj.BaseMsgType) -> None:
         await self.stop_health_monitor_and_disconnect()
 
     async def stop_health_monitor_and_disconnect(self) -> None:
         self.stop_health_monitor_event.set()
-        try:
-            await asyncio.wait_for(self.health_monitor_loop_task, timeout=STD_TIMEOUT)
-        except asyncio.TimeoutError:
-            self.log.exception("Health monitor did not stop in a timely fashion.")
+
+        # If we are inside the health_monitor_loop_task, we cannot and should
+        # not wait for the task to end. It's no problem to call disconnect
+        # before waiting because disconnect will appropriately wait for the
+        # subtasks.
+        if asyncio.current_task() is not self.health_monitor_loop_task:
+            try:
+                await asyncio.wait_for(
+                    self.health_monitor_loop_task, timeout=STD_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                self.log.exception("Health monitor did not stop in a timely fashion.")
 
         await self.disconnect()
 

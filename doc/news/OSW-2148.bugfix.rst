@@ -1,0 +1,1 @@
+Avoided canceling the health monitor within itself.

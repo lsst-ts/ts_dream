@@ -1,3 +1,13 @@
+v0.5.13 (2026-04-15)
+====================
+
+Bug Fixes
+---------
+
+- Avoided fault in case of missing weather telemetry by reporting bad weather to DREAM instead. (`OSW-1824 <https://rubinobs.atlassian.net//browse/OSW-1824>`_)
+- Avoided canceling the health monitor within itself. (`OSW-2148 <https://rubinobs.atlassian.net//browse/OSW-2148>`_)
+
+
 v0.5.12 (2026-02-10)
 ====================
 

@@ -1,0 +1,1 @@
+Stopped the health monitor reconnect loop when a shutdown is requested, so the CSC no longer reconnects or faults on its way to STANDBY.

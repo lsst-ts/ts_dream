@@ -213,7 +213,6 @@ class DreamCsc(salobj.ConfigurableCsc):
         await self.model.close_roof()
 
         self.stop_monitor_loops_event.clear()
-        self.stop_health_monitor_event.clear()
         self.weather_and_status_loop_task = asyncio.create_task(
             self.weather_and_status_loop()
         )
@@ -238,6 +237,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         if not self.connected:
             await self.cmd_enable.ack_in_progress(data=id_data, timeout=SAL_TIMEOUT)
+            self.stop_health_monitor_event.clear()
             try:
                 await self.connect()
             except Exception as e:
@@ -410,6 +410,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         while (
             time.time() - reconnect_time < RECONNECT_TIMEOUT
             and self.summary_state != salobj.State.FAULT
+            and not self.stop_health_monitor_event.is_set()
         ):
             self.log.info("Disconnect detected. Attempting to reconnect...")
             try:
@@ -427,6 +428,16 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.stop_health_monitor_event, sleep_time
                 ):
                     return
+
+        if self.stop_health_monitor_event.is_set():
+            # The reconnect loop ended because a stop was requested, which is
+            # not a reconnection failure.
+            self.log.info("Health monitor stopping; reconnection abandoned.")
+            return
+
+        if self.summary_state == salobj.State.FAULT:
+            self.log.info("CSC already in FAULT; not faulting again.")
+            return
 
         self.log.error("Failed to reconnect. Fault!")
         await self.fault(
@@ -478,6 +489,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
     async def do_resume(self, data: salobj.BaseMsgType) -> None:
         if not self.connected:
+            self.stop_health_monitor_event.clear()
             await self.connect()
 
     async def data_product_loop(self) -> None:

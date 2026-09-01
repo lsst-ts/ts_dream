@@ -33,3 +33,4 @@ ospl-info.log
 .mypy.ini
 .ruff.toml
 towncrier.toml
+.LICENSE.txt

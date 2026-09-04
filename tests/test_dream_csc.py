@@ -156,6 +156,26 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.remote.cmd_standby.set_start()
             self.assertFalse(self.srv.roof)
 
+    async def test_stop_health_monitor_tolerates_cancelled_task(self):
+        """A monitor task cancelled earlier must not break the stop path."""
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            self.csc.health_monitor_loop_task.cancel()
+            await asyncio.sleep(0)
+            try:
+                await self.csc.stop_health_monitor_and_disconnect()
+            except asyncio.CancelledError:
+                self.fail("stop_health_monitor_and_disconnect leaked CancelledError")
+            finally:
+                # Restore a task that completes at once, so teardown does not
+                # re-enter this path with a cancelled task.
+                self.csc.health_monitor_loop_task = asyncio.create_task(
+                    asyncio.sleep(0)
+                )
+
     async def test_dome_telemetry(self):
         logging.info("test_dome_telemetry")
         async with self.make_csc(

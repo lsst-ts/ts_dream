@@ -112,12 +112,17 @@ class DreamModel:
             The port to connect to.
         """
         async with self.cmd_lock:
+            await self.client.close()
             self.client = tcpip.Client(
                 host=host, port=port, log=self.log, terminator=b"\n"
             )
-            await asyncio.wait_for(
-                self.client.start_task, timeout=self.config.connection_timeout
-            )
+            try:
+                await asyncio.wait_for(
+                    self.client.start_task, timeout=self.config.connection_timeout
+                )
+            except BaseException:
+                await self.client.close()
+                raise
         self.log.debug("Connected to DREAM")
 
     async def read(self) -> dict:

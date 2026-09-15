@@ -1,4 +1,4 @@
-# This file is part of ts-dream.
+# This file is part of ts_dream.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -59,6 +59,17 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def validate_dream_model_func(self, func, **kwargs):
         await func(**kwargs)
+
+    async def test_connect_closes_previous_client(self):
+        """Reconnecting must close the client it replaces."""
+        first_client = self.model.client
+        self.assertTrue(first_client.connected)
+
+        await self.model.connect(host=tcpip.LOCAL_HOST, port=self.srv.port)
+
+        self.assertIsNot(self.model.client, first_client)
+        self.assertFalse(first_client.connected)
+        self.assertTrue(self.model.client.connected)
 
     async def test_functions_without_param(self):
         for func in [

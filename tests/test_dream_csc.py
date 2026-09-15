@@ -1,4 +1,4 @@
-# This file is part of ts-dream.
+# This file is part of ts_dream.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -60,7 +60,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
 
-        self.http_server = MockDreamHTTPServer(port=5001)
+        self.http_server = MockDreamHTTPServer(host="127.0.0.1", port=0)
         await self.http_server.start()
 
         self.log = logging.getLogger("test")
@@ -96,13 +96,27 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
     def basic_make_csc(
         self, initial_state, config_dir, simulation_mode, override="", **kwargs
     ):
-        return dream_csc.DreamCsc(
+        csc = dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
             simulation_mode=simulation_mode,
             mock_port=self.mock_port,
             override=override,
         )
+        original_configure = csc.configure
+
+        # To avoid errors from the HTTP port already being in use, we'll assign
+        # the port dynamically. To accomodate this, we also need to dynamically
+        # change the config YAML.
+        async def configure_with_mock_http(config):
+            host_port = f"127.0.0.1:{self.http_server.port}"
+            config.data_product_host = {
+                key: host_port for key in config.data_product_host
+            }
+            await original_configure(config)
+
+        csc.configure = configure_with_mock_http
+        return csc
 
     async def test_standard_state_transitions(self):
         async with self.make_csc(
@@ -155,6 +169,26 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             self.assertFalse(self.srv.roof)
             await self.remote.cmd_standby.set_start()
             self.assertFalse(self.srv.roof)
+
+    async def test_stop_health_monitor_tolerates_cancelled_task(self):
+        """A monitor task cancelled earlier must not break the stop path."""
+        async with self.make_csc(
+            initial_state=salobj.State.ENABLED,
+            config_dir=TEST_CONFIG_DIR,
+            simulation_mode=1,
+        ):
+            self.csc.health_monitor_loop_task.cancel()
+            await asyncio.sleep(0)
+            try:
+                await self.csc.stop_health_monitor_and_disconnect()
+            except asyncio.CancelledError:
+                self.fail("stop_health_monitor_and_disconnect leaked CancelledError")
+            finally:
+                # Restore a task that completes at once, so teardown does not
+                # re-enter this path with a cancelled task.
+                self.csc.health_monitor_loop_task = asyncio.create_task(
+                    asyncio.sleep(0)
+                )
 
     async def test_dome_telemetry(self):
         logging.info("test_dome_telemetry")

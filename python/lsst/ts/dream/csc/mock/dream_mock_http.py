@@ -1,4 +1,4 @@
-# This file is part of ts-dream.
+# This file is part of ts_dream.
 #
 # Developed for the Vera C. Rubin Observatory Telescope and Site Systems.
 # This product includes software developed by the LSST Project
@@ -19,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-import random
-
 from aiohttp import web
 
 
@@ -29,7 +27,7 @@ class MockDreamHTTPServer:
 
     def __init__(self, host: str = "localhost", port: int = 0):
         self.host = host
-        self.port = port if port != 0 else random.randint(1024, 65535)
+        self.port = port
         self.app = web.Application()
         self.app.add_routes(
             [
@@ -61,6 +59,9 @@ class MockDreamHTTPServer:
         await self.runner.setup()
         site = web.TCPSite(self.runner, self.host, self.port)
         await site.start()
+        # Report the port the OS actually bound, which differs from the
+        # requested port when 0 was requested.
+        self.port = self.runner.addresses[0][1]
 
     async def stop(self) -> None:
         """Stop the HTTP server."""

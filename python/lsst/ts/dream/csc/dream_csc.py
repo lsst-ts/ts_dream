@@ -34,6 +34,7 @@ from typing import Any
 import httpx
 import yaml
 from jsonschema import Draft202012Validator, ValidationError
+
 from lsst.ts import salobj, utils
 from lsst.ts.xml.enums.DREAM import Weather
 

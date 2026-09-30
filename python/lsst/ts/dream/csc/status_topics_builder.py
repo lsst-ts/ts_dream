@@ -27,6 +27,7 @@ from functools import partial
 from typing import Any, TypeVar
 
 from astropy.time import Time
+
 from lsst.ts.xml.enums import DREAM
 
 TopicData = dict[str, str | bool | int | float | list[bool] | list[float]]

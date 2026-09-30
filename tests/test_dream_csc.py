@@ -27,8 +27,9 @@ import math
 import pathlib
 import unittest
 
-import lsst.ts.dream.csc as dream_csc
 from astropy.time import Time
+
+import lsst.ts.dream.csc as dream_csc
 from lsst.ts import salobj
 from lsst.ts.dream.csc import MockWeather
 from lsst.ts.dream.csc.mock.dream_mock_http import MockDreamHTTPServer

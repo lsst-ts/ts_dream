@@ -43,16 +43,8 @@ Assuming that the ``develop-env`` docker container is running.
 .. prompt:: bash
 
     cd develop/ts_dream
-    setup -kr .
-    scons
-
-An alternative
-
-.. prompt:: bash
-
-    cd develop/ts_dream
     pip install -e .[dev]
-    pre-commit install # install black hook
+    generate_pre_commit_conf
     pytest --cov lsst.ts.dream.csc -ra
 
 

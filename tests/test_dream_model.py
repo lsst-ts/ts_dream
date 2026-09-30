@@ -29,9 +29,7 @@ from lsst.ts import tcpip
 from lsst.ts.dream.csc.mock import MockDream
 from lsst.ts.dream.csc.model import DreamModel
 
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
+logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG)
 
 """Standard timeout in seconds."""
 TIMEOUT = 5

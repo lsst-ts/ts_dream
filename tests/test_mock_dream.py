@@ -30,9 +30,7 @@ import unittest
 from lsst.ts import tcpip
 from lsst.ts.dream.csc.mock import MockDream
 
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
+logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG)
 
 random.seed(42)
 
@@ -50,9 +48,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         self.srv: MockDream = MockDream(host="0.0.0.0", port=0)
         await self.srv.start_task
         self.assertTrue(self.srv._server.is_serving())
-        self.reader, self.writer = await asyncio.open_connection(
-            host=tcpip.LOCAL_HOST, port=self.srv.port
-        )
+        self.reader, self.writer = await asyncio.open_connection(host=tcpip.LOCAL_HOST, port=self.srv.port)
 
     async def asyncTearDown(self):
         await self.srv.disconnect()
@@ -70,9 +66,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
         data : `dict`
             A dictionary with objects representing the string read.
         """
-        read_bytes = await asyncio.wait_for(
-            self.reader.readuntil(TERMINATOR), timeout=TIMEOUT
-        )
+        read_bytes = await asyncio.wait_for(self.reader.readuntil(TERMINATOR), timeout=TIMEOUT)
         data = json.loads(read_bytes.decode())
         return data
 
@@ -135,9 +129,7 @@ class MockDreamTestCase(unittest.IsolatedAsyncioTestCase):
             "setRoof",
             "heartbeat",
         ]:
-            await self.verify_command(
-                action=action, data=True
-            )  # Some commands require "data".
+            await self.verify_command(action=action, data=True)  # Some commands require "data".
 
     async def test_heartbeat(self):
         await self.verify_command(action="heartbeat")

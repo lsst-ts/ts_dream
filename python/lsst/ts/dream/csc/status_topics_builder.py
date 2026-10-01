@@ -27,6 +27,7 @@ from functools import partial
 from typing import Any, TypeVar
 
 from astropy.time import Time
+
 from lsst.ts.xml.enums import DREAM
 
 TopicData = dict[str, str | bool | int | float | list[bool] | list[float]]
@@ -234,9 +235,7 @@ def to_float(value: float | None) -> float:
     return to_value(value, math.nan)
 
 
-def map_to_bitfield(
-    messages: list[str], message_map: dict[str, DREAM.Camera]
-) -> tuple[int, str]:
+def map_to_bitfield(messages: list[str], message_map: dict[str, DREAM.Camera]) -> tuple[int, str]:
     """Aggregate the list of messages into a bitmap.
 
     The dictionary is used to map the error or warning strings into bitmap
@@ -322,27 +321,14 @@ class StatusTopicsBuilder:
             new_event["nScience"] = to_int(camera["num_science"])
             new_event["nMissed"] = to_int(camera["num_missed"])
             new_event["lastSequenceNumber"] = to_int(camera["last_image_seq"])
-            new_event["lastTriggerTime"] = isot_to_tai_unix(
-                camera["last_image_triggertime"]
-            )
-            new_event["lastImageTimingLatency"] = to_float(
-                camera["last_image_timing_latency"]
-            )
-            new_event["lastImageUSBLatency"] = to_float(
-                camera["last_image_usb_latency"]
-            )
-            new_event["lastImageArtificialLatency"] = to_float(
-                camera["last_image_artificial_latency"]
-            )
+            new_event["lastTriggerTime"] = isot_to_tai_unix(camera["last_image_triggertime"])
+            new_event["lastImageTimingLatency"] = to_float(camera["last_image_timing_latency"])
+            new_event["lastImageUSBLatency"] = to_float(camera["last_image_usb_latency"])
+            new_event["lastImageArtificialLatency"] = to_float(camera["last_image_artificial_latency"])
             new_event["lastImageType"] = camera_server_mode(camera["last_image_type"])
-            new_event["lastImagePixelMedian"] = to_float(
-                camera["last_image_pixel_median"]
-            )
+            new_event["lastImagePixelMedian"] = to_float(camera["last_image_pixel_median"])
 
-            if (
-                source not in self.camera_event_cache
-                or self.camera_event_cache[source] != new_event
-            ):
+            if source not in self.camera_event_cache or self.camera_event_cache[source] != new_event:
                 # Include the new event for publication only if it has changed.
                 # Normally SalObj will take care of this for us, but the
                 # functionality does not work if an event is being multiplexed,
@@ -394,10 +380,7 @@ class StatusTopicsBuilder:
         }
 
         error_dict: TopicData = {
-            flag: any(
-                error_string in dream_status["errors"]
-                for error_string in error_string_list
-            )
+            flag: any(error_string in dream_status["errors"] for error_string in error_string_list)
             for flag, error_string_list in error_flag_map.items()
         }
 
@@ -451,33 +434,19 @@ class StatusTopicsBuilder:
         """
         status_event: TopicData = dict()
 
-        status_event["observingMode"] = camera_server_mode(
-            dream_status["actual_observing_mode"]
-        )
-        status_event["targetObservingMode"] = camera_server_mode(
-            dream_status["target_observing_mode"]
-        )
+        status_event["observingMode"] = camera_server_mode(dream_status["actual_observing_mode"])
+        status_event["targetObservingMode"] = camera_server_mode(dream_status["target_observing_mode"])
         status_event["dome"] = dome_state(dream_status["actual_dome_state"])
-        status_event["targetDome"] = target_dome_state(
-            dream_status["target_dome_state"]
-        )
+        status_event["targetDome"] = target_dome_state(dream_status["target_dome_state"])
         status_event["heater"] = heater_state(dream_status["actual_heater_state"])
         status_event["targetHeater"] = heater_state(dream_status["target_heater_state"])
         status_event["peltier"] = peltier_state(dream_status["actual_peltier_state"])
-        status_event["targetPeltier"] = peltier_state(
-            dream_status["target_peltier_state"]
-        )
-        status_event["power"] = [
-            dream_status["pdu_status"][index] for index in pdu_status
-        ]
-        status_event["relayState"] = [
-            dream_status["electronics"][k] == v for k, v in relays.items()
-        ]
+        status_event["targetPeltier"] = peltier_state(dream_status["target_peltier_state"])
+        status_event["power"] = [dream_status["pdu_status"][index] for index in pdu_status]
+        status_event["relayState"] = [dream_status["electronics"][k] == v for k, v in relays.items()]
 
         error_flags, error_extras = map_to_bitfield(dream_status["errors"], errors)
-        warning_flags, warning_extras = map_to_bitfield(
-            dream_status["warnings"], warnings
-        )
+        warning_flags, warning_extras = map_to_bitfield(dream_status["warnings"], warnings)
 
         status_event["errorFlags"] = error_flags
         status_event["warningFlags"] = warning_flags
@@ -532,13 +501,9 @@ class StatusTopicsBuilder:
             A list of (one) `ups` event to be published.
         """
         ups_online = dream_status["ups_status"]["ups_status"] == "ONLINE"
-        ups_battery_low = (
-            dream_status["ups_status"]["battery_charge"] < self.battery_low_threshold
-        )
+        ups_battery_low = dream_status["ups_status"]["battery_charge"] < self.battery_low_threshold
         ups_not_on_mains = "UPS is on battery" in dream_status["warnings"]
-        ups_communication_error = (
-            "UPS not reachable or not responding" in dream_status["errors"]
-        )
+        ups_communication_error = "UPS not reachable or not responding" in dream_status["errors"]
 
         ups_event = {
             "online": ups_online,
@@ -679,9 +644,7 @@ class StatusTopicsBuilder:
         ups_telemetry: TopicData = dict()
 
         ups_telemetry["batteryCharge"] = dream_status["ups_status"]["battery_charge"]
-        ups_telemetry["batteryTemperature"] = dream_status["ups_status"][
-            "battery_temperature"
-        ]
+        ups_telemetry["batteryTemperature"] = dream_status["ups_status"]["battery_temperature"]
         ups_telemetry["batteryVoltage"] = dream_status["ups_status"]["battery_voltage"]
         ups_telemetry["timeRemaining"] = dream_status["ups_status"]["battery_remaining"]
         ups_telemetry["outputLoad"] = dream_status["ups_status"]["output_load"]

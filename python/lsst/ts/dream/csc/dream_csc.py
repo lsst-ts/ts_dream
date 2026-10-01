@@ -34,6 +34,7 @@ from typing import Any
 import httpx
 import yaml
 from jsonschema import Draft202012Validator, ValidationError
+
 from lsst.ts import salobj, utils
 from lsst.ts.xml.enums.DREAM import Weather
 
@@ -145,9 +146,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         )
 
         # Load the status schema
-        self.logged_schema_violation = (
-            False  # Only log schema violation one time per CSC run.
-        )
+        self.logged_schema_violation = False  # Only log schema violation one time per CSC run.
         with DREAM_STATUS_SCHEMA_FILE.open() as f:
             dream_status_schema = yaml.safe_load(f)
         self.dream_status_validator = Draft202012Validator(dream_status_schema)
@@ -185,18 +184,14 @@ class DreamCsc(salobj.ConfigurableCsc):
         # Set up the S3 bucket.
         if self.s3bucket is None:
             domock = self.config.s3instance == "test"
-            self.s3bucket = salobj.AsyncS3Bucket(
-                name=self.s3bucket_name, domock=domock, create=domock
-            )
+            self.s3bucket = salobj.AsyncS3Bucket(name=self.s3bucket_name, domock=domock, create=domock)
 
         host: str = self.config.host
         port: int = self.config.port
 
         if self.simulation_mode == 1:
             if self.mock_port is None:
-                self.mock = MockDream(
-                    host="127.0.0.1", port=0, log=self.log, send_products=False
-                )
+                self.mock = MockDream(host="127.0.0.1", port=0, log=self.log, send_products=False)
                 await self.mock.start_task
                 port = self.mock.port
                 self.log.info(f"Mock started on port {port}")
@@ -212,9 +207,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         await self.model.close_roof()
 
         self.stop_monitor_loops_event.clear()
-        self.weather_and_status_loop_task = asyncio.create_task(
-            self.weather_and_status_loop()
-        )
+        self.weather_and_status_loop_task = asyncio.create_task(self.weather_and_status_loop())
         self.health_monitor_loop_task = asyncio.create_task(self.health_monitor())
         if self.config.run_data_product_loop:
             self.data_product_loop_task = asyncio.create_task(self.data_product_loop())
@@ -241,8 +234,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                 await self.connect()
             except Exception as e:
                 err_msg = (
-                    "Could not open connection to "
-                    f"host={self.config.host}, port={self.config.port}: {e!r}"
+                    f"Could not open connection to host={self.config.host}, port={self.config.port}: {e!r}"
                 )
                 self.log.exception(err_msg)
                 await self.fault(code=ErrorCode.TCPIP_CONNECT_ERROR, report=err_msg)
@@ -326,9 +318,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         # Wait for the weather and status loop and cancel if it's too slow.
         try:
-            await asyncio.wait_for(
-                self.weather_and_status_loop_task, timeout=self.config.poll_interval
-            )
+            await asyncio.wait_for(self.weather_and_status_loop_task, timeout=self.config.poll_interval)
         except asyncio.TimeoutError:
             self.weather_and_status_loop_task.cancel()
         except asyncio.CancelledError:
@@ -336,9 +326,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         # Next, same thing for the data product loop.
         try:
-            await asyncio.wait_for(
-                self.data_product_loop_task, timeout=self.config.poll_interval
-            )
+            await asyncio.wait_for(self.data_product_loop_task, timeout=self.config.poll_interval)
         except asyncio.TimeoutError:
             self.data_product_loop_task.cancel()
         except asyncio.CancelledError:
@@ -382,9 +370,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         while not self.stop_health_monitor_event.is_set():
             if self.weather_and_status_loop_task.done():
                 if (exc := self.weather_and_status_loop_task.exception()) is not None:
-                    self.log.exception(
-                        "Weather and status loop health monitor tripped.", exc_info=exc
-                    )
+                    self.log.exception("Weather and status loop health monitor tripped.", exc_info=exc)
                 else:
                     self.log.warning("Weather and status loop health monitor tripped.")
                 break
@@ -395,9 +381,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     self.log.warning("Data product loop health monitor tripped.")
                 break
 
-            if await _sleep_unless_cancelled(
-                self.stop_health_monitor_event, self.heartbeat_interval
-            ):
+            if await _sleep_unless_cancelled(self.stop_health_monitor_event, self.heartbeat_interval):
                 return
 
         if self.stop_health_monitor_event.is_set():
@@ -424,9 +408,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     MAXIMUM_RECONNECT_WAIT,
                     BASE_RECONNECT_WAIT * 2 ** (attempt_number - 1),
                 )
-                if await _sleep_unless_cancelled(
-                    self.stop_health_monitor_event, sleep_time
-                ):
+                if await _sleep_unless_cancelled(self.stop_health_monitor_event, sleep_time):
                     return
 
         if self.stop_health_monitor_event.is_set():
@@ -478,9 +460,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         # before waiting because disconnect will appropriately wait for the
         # subtasks.
         if asyncio.current_task() is not self.health_monitor_loop_task:
-            _, pending = await asyncio.wait(
-                {self.health_monitor_loop_task}, timeout=STD_TIMEOUT
-            )
+            _, pending = await asyncio.wait({self.health_monitor_loop_task}, timeout=STD_TIMEOUT)
             if pending:
                 self.log.warning("Health monitor did not stop in a timely fashion.")
                 self.health_monitor_loop_task.cancel()
@@ -502,11 +482,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.config:
             raise RuntimeError("Not yet configured")
 
-        while (
-            self.model is not None
-            and self.model.connected
-            and not self.stop_monitor_loops_event.is_set()
-        ):
+        while self.model is not None and self.model.connected and not self.stop_monitor_loops_event.is_set():
             self.log.debug("Checking for new data products...")
 
             data_products = await self.model.get_new_data_products()
@@ -517,9 +493,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                 except Exception:
                     self.log.exception("Upload data product failed")
 
-            if await _sleep_unless_cancelled(
-                self.stop_monitor_loops_event, self.config.poll_interval
-            ):
+            if await _sleep_unless_cancelled(self.stop_monitor_loops_event, self.config.poll_interval):
                 return
 
         if self.model is None:
@@ -538,9 +512,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         ess_retries = 5
 
-        async with salobj.Remote(
-            domain=self.domain, name="ESS", index=self.config.ess_index
-        ) as ess_remote:
+        async with salobj.Remote(domain=self.domain, name="ESS", index=self.config.ess_index) as ess_remote:
             self.weather_ok_flag = None
             last_weather_ok_flag = None
 
@@ -549,15 +521,11 @@ class DreamCsc(salobj.ConfigurableCsc):
             use_precipitation = self.config.weather_limits["use_precipitation"]
 
             # Wait for the CSC to establish its connection.
-            if await _sleep_unless_cancelled(
-                self.stop_monitor_loops_event, BASE_RECONNECT_WAIT
-            ):
+            if await _sleep_unless_cancelled(self.stop_monitor_loops_event, BASE_RECONNECT_WAIT):
                 return
 
             while (
-                self.model is not None
-                and self.model.connected
-                and not self.stop_monitor_loops_event.is_set()
+                self.model is not None and self.model.connected and not self.stop_monitor_loops_event.is_set()
             ):
                 self.log.debug("Checking weather and DREAM status...")
 
@@ -584,13 +552,9 @@ class DreamCsc(salobj.ConfigurableCsc):
 
                     if use_precipitation:
                         precipitation = ess_remote.evt_precipitation.get()
-                        if precipitation is None or (
-                            precipitation.raining or precipitation.snowing
-                        ):
+                        if precipitation is None or (precipitation.raining or precipitation.snowing):
                             weather_ok_flag = False
-                            weatherFlags |= (
-                                Weather.WeatherBad | Weather.PrecipitationBad
-                            )
+                            weatherFlags |= Weather.WeatherBad | Weather.PrecipitationBad
 
                     if use_humidity:
                         humidity = ess_remote.tel_relativeHumidity.get()
@@ -603,9 +567,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                             alerts_data["outsideHumidity"] = True
                             weatherFlags |= Weather.WeatherBad | Weather.HumidityBad
 
-                    if (
-                        weather_ok_flag != last_weather_ok_flag
-                    ) or self.log.isEnabledFor(logging.DEBUG):
+                    if (weather_ok_flag != last_weather_ok_flag) or self.log.isEnabledFor(logging.DEBUG):
                         weather_report = f"Weather report:  {weather_ok_flag=}"
                         if use_wind:
                             if air_flow is None:
@@ -641,16 +603,12 @@ class DreamCsc(salobj.ConfigurableCsc):
                 except Exception:
                     self.log.exception("Failed to read weather data from ESS.")
                     # A little extra safety
-                    if await _sleep_unless_cancelled(
-                        self.stop_monitor_loops_event, CSC_RESET_SLEEP_TIME
-                    ):
+                    if await _sleep_unless_cancelled(self.stop_monitor_loops_event, CSC_RESET_SLEEP_TIME):
                         return
 
                     ess_retries -= 1
                     if ess_retries == 0:
-                        self.log.error(
-                            "Unable to read weather data from ESS. Giving up."
-                        )
+                        self.log.error("Unable to read weather data from ESS. Giving up.")
                         await self.fault(
                             code=ErrorCode.WEATHER_CSC_ERROR,
                             report="Unable to read weather data from ESS.",
@@ -666,9 +624,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                         await self.evt_setWeather.set_write(weather=weather_ok_flag)
                         self.weather_ok_flag = weather_ok_flag
                     else:
-                        self.log.info(
-                            "Weather loop ending because of TCP disconnection."
-                        )
+                        self.log.info("Weather loop ending because of TCP disconnection.")
                         return
                 except Exception:
                     self.log.exception("Failed to send weather flag!")
@@ -750,9 +706,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
-        if self.config.skip_tmpdata_products and data_product.filename.startswith(
-            "/tmpdata/"
-        ):
+        if self.config.skip_tmpdata_products and data_product.filename.startswith("/tmpdata/"):
             self.log.debug(f"Skipping temporary data file {data_product.filename}")
             return
 
@@ -760,9 +714,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         product_type = "" if data_product.type is None else f"_{data_product.type}"
 
         start_time = datetime.fromtimestamp(data_product.start, tz=timezone.utc)
-        start_time_str = start_time.isoformat(timespec="milliseconds").replace(
-            "+00:00", ""
-        )
+        start_time_str = start_time.isoformat(timespec="milliseconds").replace("+00:00", "")
 
         other = (
             f"{start_time_str}_{data_product.server}_"
@@ -780,16 +732,12 @@ class DreamCsc(salobj.ConfigurableCsc):
         )
 
         if await self.s3bucket.exists(key):
-            self.log.info(
-                f"Skipping {key} because it already exists on S3. sha256={data_product.sha256}"
-            )
+            self.log.info(f"Skipping {key} because it already exists on S3. sha256={data_product.sha256}")
 
         # Download the object with HTTP
         server = data_product.server
         if server not in self.config.data_product_host:
-            raise RuntimeError(
-                f"Unexpected data product server specified: {data_product.server}"
-            )
+            raise RuntimeError(f"Unexpected data product server specified: {data_product.server}")
         data_product_host = self.config.data_product_host[server]
         dream_url = f"http://{data_product_host}/{data_product.filename}"
 
@@ -808,9 +756,7 @@ class DreamCsc(salobj.ConfigurableCsc):
                     await self.save_to_s3(response, key)
                     return  # Success!
                 except Exception as ex:
-                    self.log.exception(
-                        f"Could not upload {key} to S3: {ex!r}; trying to save to local disk."
-                    )
+                    self.log.exception(f"Could not upload {key} to S3: {ex!r}; trying to save to local disk.")
                     await self.save_to_local_disk(response, key)
 
     async def save_to_s3(self, response: httpx.Response, key: str) -> None:
@@ -829,10 +775,7 @@ class DreamCsc(salobj.ConfigurableCsc):
 
         with io.BytesIO(await response.aread()) as buffer:
             await self.s3bucket.upload(fileobj=buffer, key=key)
-        url = (
-            f"{self.s3bucket.service_resource.meta.client.meta.endpoint_url}/"
-            f"{self.s3bucket.name}/{key}"
-        )
+        url = f"{self.s3bucket.service_resource.meta.client.meta.endpoint_url}/{self.s3bucket.name}/{key}"
         await self.evt_largeFileObjectAvailable.set_write(
             url=url,
             generator="dream",
@@ -856,9 +799,7 @@ class DreamCsc(salobj.ConfigurableCsc):
         if not self.s3bucket:
             raise RuntimeError("S3 bucket not configured")
 
-        filepath = (
-            pathlib.Path(self.config.data_product_path) / self.s3bucket.name / key
-        )
+        filepath = pathlib.Path(self.config.data_product_path) / self.s3bucket.name / key
         dirpath = filepath.parent
         if not dirpath.exists():
             self.log.info(f"Creating directory {str(dirpath)}")

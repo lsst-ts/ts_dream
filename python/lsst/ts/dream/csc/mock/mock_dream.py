@@ -279,9 +279,7 @@ class MockDream(tcpip.OneClientServer):
     ) -> None:
         self.name = "MockDream"
         self.read_loop_task: asyncio.Future = asyncio.Future()
-        self.log: logging.Logger = (
-            logging.getLogger(type(self).__name__) if log is None else log
-        )
+        self.log: logging.Logger = logging.getLogger(type(self).__name__) if log is None else log
         self.weather: bool | None = None
         self.send_products = send_products
 
@@ -369,9 +367,7 @@ class MockDream(tcpip.OneClientServer):
                 )
 
             except asyncio.exceptions.IncompleteReadError:
-                self.log.info(
-                    "Read error encountered, probably because the connection was closed."
-                )
+                self.log.info("Read error encountered, probably because the connection was closed.")
 
             except Exception as ex:
                 self.log.exception("Exception raised while preparing response.")
@@ -446,9 +442,7 @@ class MockDream(tcpip.OneClientServer):
         self.log.info("get_new_data_products called.")
         return {
             "msg_type": "list",
-            "new_products": (
-                json.loads(_dream_new_data_products) if self.send_products else []
-            ),
+            "new_products": (json.loads(_dream_new_data_products) if self.send_products else []),
         }
 
     async def set_weather(self, data: bool | None) -> dict:

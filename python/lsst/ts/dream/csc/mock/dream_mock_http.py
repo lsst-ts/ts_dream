@@ -47,9 +47,7 @@ class MockDreamHTTPServer:
 
     async def handle_request(self, request: web.Request) -> web.Response:
         if request.path in self.files:
-            return web.Response(
-                text=self.files[request.path], content_type="text/plain"
-            )
+            return web.Response(text=self.files[request.path], content_type="text/plain")
         return web.Response(status=404, text="File not found")
 
     async def start(self) -> None:

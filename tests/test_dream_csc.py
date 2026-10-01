@@ -27,8 +27,9 @@ import math
 import pathlib
 import unittest
 
-import lsst.ts.dream.csc as dream_csc
 from astropy.time import Time
+
+import lsst.ts.dream.csc as dream_csc
 from lsst.ts import salobj
 from lsst.ts.dream.csc import MockWeather
 from lsst.ts.dream.csc.mock.dream_mock_http import MockDreamHTTPServer
@@ -47,9 +48,7 @@ from lsst.ts.xml.enums.DREAM import (
 STD_TIMEOUT = 20  # standard command timeout (sec)
 TEST_CONFIG_DIR = pathlib.Path(__file__).parent / "config"
 
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
+logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG)
 
 
 def timestamp(timestamp_isot: str) -> float:
@@ -64,9 +63,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         await self.http_server.start()
 
         self.log = logging.getLogger("test")
-        self.srv = dream_csc.mock.MockDream(
-            host="0.0.0.0", port=0, log=logging.getLogger("mock")
-        )
+        self.srv = dream_csc.mock.MockDream(host="0.0.0.0", port=0, log=logging.getLogger("mock"))
         await self.srv.start_task
 
         self.weather_csc = MockWeather(initial_state=salobj.State.ENABLED)
@@ -93,9 +90,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         finally:
             await super().asyncTearDown()
 
-    def basic_make_csc(
-        self, initial_state, config_dir, simulation_mode, override="", **kwargs
-    ):
+    def basic_make_csc(self, initial_state, config_dir, simulation_mode, override="", **kwargs):
         csc = dream_csc.DreamCsc(
             initial_state=initial_state,
             config_dir=config_dir,
@@ -110,9 +105,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
         # change the config YAML.
         async def configure_with_mock_http(config):
             host_port = f"127.0.0.1:{self.http_server.port}"
-            config.data_product_host = {
-                key: host_port for key in config.data_product_host
-            }
+            config.data_product_host = {key: host_port for key in config.data_product_host}
             await original_configure(config)
 
         csc.configure = configure_with_mock_http
@@ -186,9 +179,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             finally:
                 # Restore a task that completes at once, so teardown does not
                 # re-enter this path with a cancelled task.
-                self.csc.health_monitor_loop_task = asyncio.create_task(
-                    asyncio.sleep(0)
-                )
+                self.csc.health_monitor_loop_task = asyncio.create_task(asyncio.sleep(0))
 
     async def test_dome_telemetry(self):
         logging.info("test_dome_telemetry")
@@ -197,9 +188,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            dome_telemetry = await self.remote.tel_dome.next(
-                timeout=STD_TIMEOUT, flush=False
-            )
+            dome_telemetry = await self.remote.tel_dome.next(timeout=STD_TIMEOUT, flush=False)
             self.assertEqual(dome_telemetry.encoder, 110)
 
     async def test_environment_telemetry(self):
@@ -209,9 +198,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            environment_telemetry = await self.remote.tel_environment.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            environment_telemetry = await self.remote.tel_environment.next(flush=False, timeout=STD_TIMEOUT)
 
             temperature = [
                 25.76363921680424,  # Electronics top
@@ -237,9 +224,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                     temperature[i],
                     places=4,
                 )
-                self.assertAlmostEqual(
-                    environment_telemetry.humidity[i], humidity[i], places=4
-                )
+                self.assertAlmostEqual(environment_telemetry.humidity[i], humidity[i], places=4)
 
     async def test_camera_telemetry(self):
         logging.info("test_camera_telemetry")
@@ -248,9 +233,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            camera_telemetry = await self.remote.tel_camera.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            camera_telemetry = await self.remote.tel_camera.next(flush=False, timeout=STD_TIMEOUT)
             timestamps = [
                 "2025-09-25T14:24:30.341",
                 "2025-09-25T14:24:31.078",
@@ -267,9 +250,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             temperatures = [3.14, math.nan, 42.0, math.nan, 1729.0]
 
             for i in range(len(timestamps)):
-                if math.isnan(
-                    camera_telemetry.lastCameraHeartbeatTimestamp[i]
-                ) and math.isnan(timestamps[i]):
+                if math.isnan(camera_telemetry.lastCameraHeartbeatTimestamp[i]) and math.isnan(timestamps[i]):
                     continue
                 self.assertAlmostEqual(
                     camera_telemetry.lastCameraHeartbeatTimestamp[i],
@@ -278,9 +259,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 )
 
             for i in range(len(temperatures)):
-                if math.isnan(camera_telemetry.ccdTemperature[i]) and math.isnan(
-                    temperatures[i]
-                ):
+                if math.isnan(camera_telemetry.ccdTemperature[i]) and math.isnan(temperatures[i]):
                     continue
                 self.assertAlmostEqual(
                     camera_telemetry.ccdTemperature[i],
@@ -295,14 +274,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            power_supply_telemetry = await self.remote.tel_powerSupply.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            power_supply_telemetry = await self.remote.tel_powerSupply.next(flush=False, timeout=STD_TIMEOUT)
             self.assertAlmostEqual(power_supply_telemetry.voltage[0], 0.0405, places=4)
             self.assertAlmostEqual(power_supply_telemetry.voltage[1], 0.0, places=4)
-            self.assertAlmostEqual(
-                power_supply_telemetry.current[0], 0.0008196, places=4
-            )
+            self.assertAlmostEqual(power_supply_telemetry.current[0], 0.0008196, places=4)
             self.assertAlmostEqual(power_supply_telemetry.current[1], 20.0, places=4)
 
     async def test_ups_telemetry(self):
@@ -325,9 +300,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            alerts_event = await self.remote.evt_alerts.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            alerts_event = await self.remote.evt_alerts.next(flush=False, timeout=STD_TIMEOUT)
             self.assertFalse(alerts_event.outsideHumidity)
             self.assertFalse(alerts_event.outsideTemperature)
 
@@ -354,14 +327,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             expected_events[Camera.East].nScience = 0
             expected_events[Camera.East].nMissed = 0
             expected_events[Camera.East].lastSequenceNumber = 62955554
-            expected_events[Camera.East].lastTriggerTime = timestamp(
-                "2025-09-25T09:52:42.496"
-            )
+            expected_events[Camera.East].lastTriggerTime = timestamp("2025-09-25T09:52:42.496")
             expected_events[Camera.East].lastImageTimingLatency = 0.003159
             expected_events[Camera.East].lastImageUSBLatency = 0.000259
-            expected_events[Camera.East].lastImageArtificialLatency = (
-                5.7220458984375e-06
-            )
+            expected_events[Camera.East].lastImageArtificialLatency = 5.7220458984375e-06
             expected_events[Camera.East].lastImageType = CameraServerMode.Bias
             expected_events[Camera.East].lastImagePixelMedian = 1004
 
@@ -374,14 +343,10 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             expected_events[Camera.North].nScience = 0
             expected_events[Camera.North].nMissed = 0
             expected_events[Camera.North].lastSequenceNumber = 62955554
-            expected_events[Camera.North].lastTriggerTime = timestamp(
-                "2025-09-25T09:52:42.496"
-            )
+            expected_events[Camera.North].lastTriggerTime = timestamp("2025-09-25T09:52:42.496")
             expected_events[Camera.North].lastImageTimingLatency = 0.003164
             expected_events[Camera.North].lastImageUSBLatency = 0.000252
-            expected_events[Camera.North].lastImageArtificialLatency = (
-                6.4373016357421875e-06
-            )
+            expected_events[Camera.North].lastImageArtificialLatency = 6.4373016357421875e-06
             expected_events[Camera.North].lastImageType = CameraServerMode.Science
             expected_events[Camera.North].lastImagePixelMedian = 1015
 
@@ -394,25 +359,18 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             expected_events[Camera.South].nScience = 0
             expected_events[Camera.South].nMissed = 0
             expected_events[Camera.South].lastSequenceNumber = 62955554
-            expected_events[Camera.South].lastTriggerTime = timestamp(
-                "2025-09-25T09:52:42.496"
-            )
+            expected_events[Camera.South].lastTriggerTime = timestamp("2025-09-25T09:52:42.496")
             expected_events[Camera.South].lastImageTimingLatency = 0.003183
             expected_events[Camera.South].lastImageUSBLatency = 0.000239
-            expected_events[Camera.South].lastImageArtificialLatency = (
-                6.9141387939453125e-06
-            )
+            expected_events[Camera.South].lastImageArtificialLatency = 6.9141387939453125e-06
             expected_events[Camera.South].lastImageType = CameraServerMode.Bias
             expected_events[Camera.South].lastImagePixelMedian = 993
 
             camera_events = [
-                await self.remote.evt_camera.next(flush=False, timeout=STD_TIMEOUT)
-                for _ in range(3)
+                await self.remote.evt_camera.next(flush=False, timeout=STD_TIMEOUT) for _ in range(3)
             ]
 
-            def validate_camera_event(
-                actual: salobj.BaseMsgType, expected: salobj.BaseMsgType
-            ) -> None:
+            def validate_camera_event(actual: salobj.BaseMsgType, expected: salobj.BaseMsgType) -> None:
                 self.assertEqual(actual.source, expected.source)
                 self.assertEqual(actual.cameraMode, expected.cameraMode)
                 self.assertEqual(actual.nBlank, expected.nBlank)
@@ -422,23 +380,15 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(actual.nScience, expected.nScience)
                 self.assertEqual(actual.nMissed, expected.nMissed)
                 self.assertEqual(actual.lastSequenceNumber, expected.lastSequenceNumber)
-                self.assertAlmostEqual(
-                    actual.lastTriggerTime, expected.lastTriggerTime, places=3
-                )
-                self.assertAlmostEqual(
-                    actual.lastImageTimingLatency, expected.lastImageTimingLatency
-                )
-                self.assertAlmostEqual(
-                    actual.lastImageUSBLatency, expected.lastImageUSBLatency
-                )
+                self.assertAlmostEqual(actual.lastTriggerTime, expected.lastTriggerTime, places=3)
+                self.assertAlmostEqual(actual.lastImageTimingLatency, expected.lastImageTimingLatency)
+                self.assertAlmostEqual(actual.lastImageUSBLatency, expected.lastImageUSBLatency)
                 self.assertAlmostEqual(
                     actual.lastImageArtificialLatency,
                     expected.lastImageArtificialLatency,
                 )
                 self.assertEqual(actual.lastImageType, expected.lastImageType)
-                self.assertEqual(
-                    actual.lastImagePixelMedian, expected.lastImagePixelMedian
-                )
+                self.assertEqual(actual.lastImagePixelMedian, expected.lastImagePixelMedian)
 
             for camera_event in camera_events:
                 source = camera_event.source
@@ -456,9 +406,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            errors_event = await self.remote.evt_errors.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            errors_event = await self.remote.evt_errors.next(flush=False, timeout=STD_TIMEOUT)
 
             # Based on the content of the status message
             # in the mock object.
@@ -480,9 +428,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            power_supply_event = await self.remote.evt_powerSupply.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            power_supply_event = await self.remote.evt_powerSupply.next(flush=False, timeout=STD_TIMEOUT)
             self.assertFalse(power_supply_event.temperatureError)
             self.assertFalse(power_supply_event.inputVoltageError)
 
@@ -494,18 +440,14 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             simulation_mode=1,
         ):
             # When CSC is disabled, the setRoof event should show False
-            set_roof_event = await self.remote.evt_setRoof.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            set_roof_event = await self.remote.evt_setRoof.next(flush=False, timeout=STD_TIMEOUT)
             self.remote.evt_setRoof.flush()
             self.assertFalse(set_roof_event.roof)
 
             await self.remote.cmd_enable.set_start()
 
             # When CSC is enabled, the setRoof event should show True
-            set_roof_event = await self.remote.evt_setRoof.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            set_roof_event = await self.remote.evt_setRoof.next(flush=False, timeout=STD_TIMEOUT)
             self.assertTrue(set_roof_event.roof)
 
     async def test_set_weather_event(self):
@@ -515,16 +457,12 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            set_weather_event = await self.remote.evt_setWeather.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            set_weather_event = await self.remote.evt_setWeather.next(flush=False, timeout=STD_TIMEOUT)
             self.remote.evt_setWeather.flush()
             self.assertTrue(set_weather_event.weather)
 
             self.weather_csc.windspeed = 1000
-            set_weather_event = await self.remote.evt_setWeather.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            set_weather_event = await self.remote.evt_setWeather.next(flush=False, timeout=STD_TIMEOUT)
             self.assertFalse(set_weather_event.weather)
 
     async def test_status_event(self):
@@ -534,9 +472,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            status_event = await self.remote.evt_status.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            status_event = await self.remote.evt_status.next(flush=False, timeout=STD_TIMEOUT)
             self.assertEqual(status_event.observingMode, CameraServerMode.Idle)
             self.assertEqual(status_event.targetObservingMode, CameraServerMode.Auto)
             self.assertEqual(status_event.dome, DomeState.Open)
@@ -567,9 +503,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 | Warning.SimulatedPdu
                 | Warning.SimulatedEnv,
             )
-            self.assertEqual(
-                status_event.additionalErrors, "extra error 1;extra error 2"
-            )
+            self.assertEqual(status_event.additionalErrors, "extra error 1;extra error 2")
             self.assertEqual(status_event.additionalWarnings, "")
 
     async def test_temperature_control_event(self):
@@ -606,27 +540,17 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             config_dir=TEST_CONFIG_DIR,
             simulation_mode=1,
         ):
-            weather_event = await self.remote.evt_weather.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
+            weather_event = await self.remote.evt_weather.next(flush=False, timeout=STD_TIMEOUT)
             self.assertEqual(weather_event.weatherFlags, 0)
 
             self.weather_csc.windspeed = 1000
-            weather_event = await self.remote.evt_weather.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            self.assertEqual(
-                weather_event.weatherFlags, Weather.WeatherBad | Weather.WindBad
-            )
+            weather_event = await self.remote.evt_weather.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(weather_event.weatherFlags, Weather.WeatherBad | Weather.WindBad)
 
             self.weather_csc.windspeed = 0
             self.weather_csc.humidity = 100
-            weather_event = await self.remote.evt_weather.next(
-                flush=False, timeout=STD_TIMEOUT
-            )
-            self.assertEqual(
-                weather_event.weatherFlags, Weather.WeatherBad | Weather.HumidityBad
-            )
+            weather_event = await self.remote.evt_weather.next(flush=False, timeout=STD_TIMEOUT)
+            self.assertEqual(weather_event.weatherFlags, Weather.WeatherBad | Weather.HumidityBad)
 
     async def test_new_products(self):
         logging.info("test_new_products")
@@ -653,7 +577,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
                 ]
                 for j, key_ending in enumerate(file_index):
                     if key.endswith(key_ending):
-                        self.assertEqual(file_contents, f"This is data product {j+1}")
+                        self.assertEqual(file_contents, f"This is data product {j + 1}")
                         break
 
     async def test_data_upload_failure(self):
@@ -668,23 +592,20 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.remote.cmd_setLogLevel.set_start(level=40)
             self.remote.evt_logMessage.flush()
 
-            with unittest.mock.patch.object(
-                self.csc.s3bucket,
-                "upload",
-                side_effect=Exception("Simulated upload failure"),
-            ), unittest.mock.patch(
-                "builtins.open", unittest.mock.mock_open()
-            ) as mock_file:
+            with (
+                unittest.mock.patch.object(
+                    self.csc.s3bucket,
+                    "upload",
+                    side_effect=Exception("Simulated upload failure"),
+                ),
+                unittest.mock.patch("builtins.open", unittest.mock.mock_open()) as mock_file,
+            ):
                 mock_file.side_effect = IOError("Disk full")
                 for _ in range(4):
-                    log_message = await self.remote.evt_logMessage.next(
-                        flush=False, timeout=STD_TIMEOUT
-                    )
+                    log_message = await self.remote.evt_logMessage.next(flush=False, timeout=STD_TIMEOUT)
                     self.assertTrue("Simulated upload failure" in log_message.message)
 
-                    log_message = await self.remote.evt_logMessage.next(
-                        flush=False, timeout=STD_TIMEOUT
-                    )
+                    log_message = await self.remote.evt_logMessage.next(flush=False, timeout=STD_TIMEOUT)
                     self.assertTrue("Upload data product failed" in log_message.message)
 
     async def test_data_download_failure(self):
@@ -701,9 +622,7 @@ class CscTestCase(salobj.BaseCscTestCase, unittest.IsolatedAsyncioTestCase):
             await self.remote.cmd_setLogLevel.set_start(level=40)
 
             for i in range(100):
-                log_message = await self.remote.evt_logMessage.next(
-                    flush=False, timeout=STD_TIMEOUT
-                )
+                log_message = await self.remote.evt_logMessage.next(flush=False, timeout=STD_TIMEOUT)
                 self.log.debug(f"log message from CSC: {log_message.message}")
                 if log_message.level == 40:
                     break

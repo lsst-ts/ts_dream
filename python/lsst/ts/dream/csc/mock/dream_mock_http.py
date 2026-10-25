@@ -13,13 +13,11 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-import random
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 from aiohttp import web
 
@@ -29,7 +27,7 @@ class MockDreamHTTPServer:
 
     def __init__(self, host: str = "localhost", port: int = 0):
         self.host = host
-        self.port = port if port != 0 else random.randint(1024, 65535)
+        self.port = port
         self.app = web.Application()
         self.app.add_routes(
             [
@@ -49,9 +47,7 @@ class MockDreamHTTPServer:
 
     async def handle_request(self, request: web.Request) -> web.Response:
         if request.path in self.files:
-            return web.Response(
-                text=self.files[request.path], content_type="text/plain"
-            )
+            return web.Response(text=self.files[request.path], content_type="text/plain")
         return web.Response(status=404, text="File not found")
 
     async def start(self) -> None:
@@ -61,6 +57,9 @@ class MockDreamHTTPServer:
         await self.runner.setup()
         site = web.TCPSite(self.runner, self.host, self.port)
         await site.start()
+        # Report the port the OS actually bound, which differs from the
+        # requested port when 0 was requested.
+        self.port = self.runner.addresses[0][1]
 
     async def stop(self) -> None:
         """Stop the HTTP server."""

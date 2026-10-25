@@ -1,0 +1,1 @@
+Switched from black/flake8/isort to ruff, added the standard TSSW GitHub workflows, merged the two version history files and set up towncrier, fixed the EUPS dependencies, and aligned the packaging with the developer guide.

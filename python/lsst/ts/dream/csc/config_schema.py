@@ -13,22 +13,21 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = ["CONFIG_SCHEMA"]
 
 import yaml
 
-CONFIG_SCHEMA = yaml.safe_load(
-    """
+CONFIG_SCHEMA = yaml.safe_load("""
     $schema: http://json-schema.org/draft-07/schema#
     $id: https://github.com/lsst-ts/ts_dream/blob/master/python/lsst/ts/dream/csc/config_schema.py
     # title must end with one or more spaces followed by the schema version, which must begin with "v"
-    title: DREAM v7
+    title: DREAM v8
     description: Schema for DREAM configuration files
     type: object
     properties:
@@ -51,6 +50,13 @@ CONFIG_SCHEMA = yaml.safe_load(
         type: number
         exclusiveMinimum: 0
         default: 10
+      reconnect_timeout:
+        description: >-
+          Time limit for reconnecting to the TCP/IP interface after a
+          disconnect is detected, before faulting the CSC (sec)
+        type: number
+        exclusiveMinimum: 0
+        default: 600
       poll_interval:
         description: Interval for polling the weather station (sec)
         type: number
@@ -130,6 +136,7 @@ CONFIG_SCHEMA = yaml.safe_load(
       - port
       - connection_timeout
       - read_timeout
+      - reconnect_timeout
       - poll_interval
       - ess_index
       - battery_low_threshold
@@ -140,5 +147,4 @@ CONFIG_SCHEMA = yaml.safe_load(
       - skip_tmpdata_products
       - weather_limits
     additionalProperties: false
-    """
-)
+    """)

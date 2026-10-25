@@ -13,13 +13,13 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#  type: ignore
+# type: ignore
 
 import logging
 import unittest
@@ -29,9 +29,7 @@ from lsst.ts import tcpip
 from lsst.ts.dream.csc.mock import MockDream
 from lsst.ts.dream.csc.model import DreamModel
 
-logging.basicConfig(
-    format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG
-)
+logging.basicConfig(format="%(asctime)s:%(levelname)s:%(name)s:%(message)s", level=logging.DEBUG)
 
 """Standard timeout in seconds."""
 TIMEOUT = 5
@@ -59,6 +57,17 @@ class DreamModelTestCase(unittest.IsolatedAsyncioTestCase):
 
     async def validate_dream_model_func(self, func, **kwargs):
         await func(**kwargs)
+
+    async def test_connect_closes_previous_client(self):
+        """Reconnecting must close the client it replaces."""
+        first_client = self.model.client
+        self.assertTrue(first_client.connected)
+
+        await self.model.connect(host=tcpip.LOCAL_HOST, port=self.srv.port)
+
+        self.assertIsNot(self.model.client, first_client)
+        self.assertFalse(first_client.connected)
+        self.assertTrue(self.model.client.connected)
 
     async def test_functions_without_param(self):
         for func in [

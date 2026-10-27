@@ -8,6 +8,29 @@ Version History
 
 .. towncrier release notes start
 
+v0.5.14 (2026-10-25)
+====================
+
+Bug Fixes
+---------
+
+- Made the reconnection timeout configurable and increased its default so the CSC survives a DREAM host power cycle. (`OBS-1650 <https://rubinobs.atlassian.net//browse/OBS-1650>`_)
+- Stopped the health monitor reconnect loop when a shutdown is requested, so the CSC no longer reconnects or faults on its way to STANDBY. (`OBS-1749 <https://rubinobs.atlassian.net//browse/OBS-1749>`_)
+- Changed testing to dynamically assign HTTP ports. (`OSW-792 <https://rubinobs.atlassian.net//browse/OSW-792>`_)
+
+
+Documentation
+-------------
+
+- Added insert-license pre-commit hook. (`OSW-2878 <https://rubinobs.atlassian.net//browse/OSW-2878>`_)
+
+
+Other Changes and Additions
+---------------------------
+
+- Switched from black/flake8/isort to ruff, added the standard TSSW GitHub workflows, merged the two version history files and set up towncrier, fixed the EUPS dependencies, and aligned the packaging with the developer guide. (`SSW-3006 <https://rubinobs.atlassian.net//browse/SSW-3006>`_)
+
+
 v0.5.13 (2026-04-15)
 ====================
 
